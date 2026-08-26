@@ -147,14 +147,15 @@ const deleteMod = (id) => {
     </div>
 
     <!-- 照片放大檢視 Modal -->
-    <div v-if="previewImage" class="modal-overlay" @click="previewImage = ''">
-      <div class="lightbox-content">
+    <div v-if="previewImage" class="lightbox-overlay" @click="previewImage = ''">
+      <div class="lightbox-content" @click.stop>
         <button class="btn-close-lightbox" @click="previewImage = ''">
           <X :size="24" />
         </button>
         <img :src="previewImage" alt="改裝完工實裝大圖" />
       </div>
     </div>
+
 
     <!-- 新增改裝 Modal -->
     <ModalAddMod v-if="showAddModal" @close="showAddModal = false" />
@@ -365,29 +366,59 @@ const deleteMod = (id) => {
   line-height: 1.4;
 }
 
-/* Lightbox 大圖檢視 */
+/* Lightbox 大圖檢視 (垂直水平置中) */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
 .lightbox-content {
   position: relative;
-  max-width: 90vw;
+  max-width: 92vw;
   max-height: 85vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .lightbox-content img {
   max-width: 100%;
-  max-height: 80vh;
+  max-height: 75vh;
+  object-fit: contain;
   border-radius: var(--radius-md);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .btn-close-lightbox {
   position: absolute;
-  top: -40px;
+  top: -36px;
   right: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   color: #fff;
   cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
 }
+.btn-close-lightbox:hover {
+  background: rgba(230, 0, 18, 0.8);
+}
+
 
 .empty-state {
   text-align: center;

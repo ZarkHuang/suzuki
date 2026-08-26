@@ -17,9 +17,12 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
     <div class="header-container">
       <!-- 車輛 Logo 與名稱 -->
       <div class="brand-badge" @click="router.push('/')">
-        <div class="suzuki-s-mark">S</div>
+        <div class="suzuki-s-mark">
+          <img src="/icon.svg" alt="SUI 125 Logo" class="brand-logo-img" />
+        </div>
         <div class="brand-info">
           <div class="brand-name">SUZUKI <span class="model-tag">SUI 125</span></div>
+
           <div class="plate-status-row">
             <span class="plate-number">{{ store.vehicle.licensePlate || '日系極簡小鴨' }}</span>
             <span 
@@ -64,12 +67,17 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
   position: sticky;
   top: 0;
   z-index: 90;
-  background: rgba(10, 12, 16, 0.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(10, 12, 16, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 10px 16px;
+  /* 完美避開 iPhone 瀏海與動態島 */
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: 10px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
+
 
 .header-container {
   max-width: 540px;
@@ -87,20 +95,22 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
 }
 
 .suzuki-s-mark {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--suzuki-red), #ff3b30);
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 900;
-  font-size: 1.15rem;
-  color: #fff;
-  font-family: var(--font-sans);
-  box-shadow: 0 2px 8px var(--suzuki-red-glow);
-  transform: skewX(-6deg);
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 91, 172, 0.4);
 }
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 
 .brand-name {
   font-weight: 800;
