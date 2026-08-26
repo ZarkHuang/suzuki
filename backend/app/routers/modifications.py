@@ -19,10 +19,11 @@ def get_modifications(
 ):
     query = db.query(models.Modification)
     if user:
-        mods = query.filter(models.Modification.user_id == user.id).order_by(models.Modification.odometer.desc()).all()
+        mods = query.filter((models.Modification.user_id == user.id) | (models.Modification.user_id.is_(None))).order_by(models.Modification.odometer.desc()).all()
     else:
-        mods = query.filter(models.Modification.user_id.is_(None)).order_by(models.Modification.odometer.desc()).all()
+        mods = query.order_by(models.Modification.odometer.desc()).all()
     return mods
+
 
 @router.post("", response_model=schemas.ModificationResponse, status_code=status.HTTP_201_CREATED)
 def create_modification(

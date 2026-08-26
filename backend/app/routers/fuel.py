@@ -15,10 +15,11 @@ def get_fuel_logs(
 ):
     query = db.query(models.FuelLog)
     if user:
-        logs = query.filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc()).all()
+        logs = query.filter((models.FuelLog.user_id == user.id) | (models.FuelLog.user_id.is_(None))).order_by(models.FuelLog.odometer.desc()).all()
     else:
-        logs = query.filter(models.FuelLog.user_id.is_(None)).order_by(models.FuelLog.odometer.desc()).all()
+        logs = query.order_by(models.FuelLog.odometer.desc()).all()
     return logs
+
 
 @router.post("", response_model=schemas.FuelLogResponse, status_code=status.HTTP_201_CREATED)
 def create_fuel_log(

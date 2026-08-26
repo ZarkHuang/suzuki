@@ -304,26 +304,12 @@ export const useMotoStore = defineStore('moto', {
             api.getModifications().catch(() => [])
           ])
 
-          // 如果 MySQL 資料庫是完全空的，將前端現有預設資料灌入 MySQL
-          if (fuels.length === 0 && maints.length === 0 && this.fuelLogs.length > 0) {
-            console.log('🚀 MySQL 為空，正在自動注入初始範例資料至 MySQL...')
-            if (v) await api.updateVehicle(this.vehicle).catch(() => {})
-            for (const f of this.fuelLogs) {
-              await api.createFuelLog(f).catch(() => {})
-            }
-            for (const m of this.maintenanceLogs) {
-              await api.createMaintenanceLog(m).catch(() => {})
-            }
-            for (const mod of this.modifications) {
-              await api.createModification(mod).catch(() => {})
-            }
-          } else {
-            // MySQL 內已有資料（包含使用者從 phpMyAdmin 修改的資料），直接覆蓋前端！
-            if (v) this.vehicle = v
-            this.fuelLogs = fuels
-            this.maintenanceLogs = maints
-            this.modifications = mods
-          }
+          // MySQL 雲端數據為唯一真理：直接同步並覆蓋前端
+          if (v) this.vehicle = v
+          this.fuelLogs = fuels
+          this.maintenanceLogs = maints
+          this.modifications = mods
+          console.log(`✅ 已從 MySQL 同步：${fuels.length} 筆加油、${maints.length} 筆保養、${mods.length} 筆改裝`)
         }
       } catch (err) {
         console.warn('後端連線異常，將運行於離線 LocalStorage 模式:', err)
@@ -333,6 +319,7 @@ export const useMotoStore = defineStore('moto', {
         this.persist()
       }
     },
+
 
 
     persist() {

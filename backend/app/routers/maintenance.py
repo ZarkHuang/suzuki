@@ -17,10 +17,11 @@ def get_maintenance_logs(
 ):
     query = db.query(models.MaintenanceLog)
     if user:
-        logs = query.filter(models.MaintenanceLog.user_id == user.id).order_by(models.MaintenanceLog.odometer.desc()).all()
+        logs = query.filter((models.MaintenanceLog.user_id == user.id) | (models.MaintenanceLog.user_id.is_(None))).order_by(models.MaintenanceLog.odometer.desc()).all()
     else:
-        logs = query.filter(models.MaintenanceLog.user_id.is_(None)).order_by(models.MaintenanceLog.odometer.desc()).all()
+        logs = query.order_by(models.MaintenanceLog.odometer.desc()).all()
     return logs
+
 
 @router.post("", response_model=schemas.MaintenanceLogResponse, status_code=status.HTTP_201_CREATED)
 def create_maintenance_log(

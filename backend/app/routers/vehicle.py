@@ -14,12 +14,11 @@ def get_vehicle(
 ):
     query = db.query(models.Vehicle)
     if user:
-        vehicle = query.filter(models.Vehicle.user_id == user.id).first()
+        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
     else:
-        vehicle = query.filter(models.Vehicle.user_id.is_(None)).first() or query.first()
+        vehicle = query.first()
 
     if not vehicle:
-        # 自動建立預設 SUI 125
         vehicle = models.Vehicle(
             id=f"veh-{user.id if user else 'default'}",
             user_id=user.id if user else None,
@@ -36,6 +35,7 @@ def get_vehicle(
         db.refresh(vehicle)
     return vehicle
 
+@router.post("", response_model=schemas.VehicleResponse)
 @router.put("", response_model=schemas.VehicleResponse)
 def update_vehicle(
     vehicle_in: schemas.VehicleUpdate,
@@ -44,9 +44,9 @@ def update_vehicle(
 ):
     query = db.query(models.Vehicle)
     if user:
-        vehicle = query.filter(models.Vehicle.user_id == user.id).first()
+        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
     else:
-        vehicle = query.filter(models.Vehicle.user_id.is_(None)).first() or query.first()
+        vehicle = query.first()
 
     if not vehicle:
         vehicle = models.Vehicle(
@@ -62,14 +62,15 @@ def update_vehicle(
         )
         db.add(vehicle)
 
-    # 批次更新欄位
     update_data = vehicle_in.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(vehicle, field, value)
+        if hasattr(vehicle, field) and value is not None:
+            setattr(vehicle, field, value)
 
     db.commit()
     db.refresh(vehicle)
     return vehicle
+
 
 @router.patch("/odometer")
 def update_odometer(
