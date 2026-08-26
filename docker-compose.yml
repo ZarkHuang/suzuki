@@ -1,0 +1,63 @@
+services:
+  # 1. MySQL 8.0 資料庫
+  db:
+    image: mysql:8.0
+    container_name: motolog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: motolog
+      MYSQL_USER: motouser
+      MYSQL_PASSWORD: motopassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # 2. 資料庫可視化管理介面 (phpMyAdmin - 類似 pgAdmin)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: motolog-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_USER: motouser
+      PMA_PASSWORD: motopassword
+    depends_on:
+      - db
+
+  # 3. Python FastAPI 後端服務
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: motolog-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+pymysql://motouser:motopassword@db:3306/motolog
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      - db
+
+  # 4. Vue 3 前端 PWA
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: motolog-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  backend_uploads:
+
