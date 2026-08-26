@@ -115,11 +115,12 @@ export const useMotoStore = defineStore('moto', {
 
       // 設定
       settings: localData?.settings || {
-        apiUrl: 'http://localhost:8000',
+        apiUrl: 'https://suzuki-n9ey.onrender.com',
         enableNotifications: true,
         notifyAdvanceKm: 150,
         currencySymbol: 'NT$'
       }
+
     }
   },
 

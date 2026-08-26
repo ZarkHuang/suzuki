@@ -1,16 +1,28 @@
-// 前端與 Python FastAPI 後端的 HTTP API 溝通模組
+const CLOUD_API_URL = 'https://suzuki-n9ey.onrender.com'
 
-// 當在 Docker 容器環境 (port 80) 時走相對路徑 /api，在 Vite 本地開發 (port 5173) 時走 http://localhost:8000/api
 const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
-    if (window.location.port === '5173') {
-      return 'http://localhost:8000'
+    // 優先讀取使用者在設定頁自訂的網址 (若有)
+    try {
+      const saved = localStorage.getItem('suzuki_sui_motolog_v1')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.settings && parsed.settings.apiUrl && parsed.settings.apiUrl !== 'http://localhost:8000') {
+          return parsed.settings.apiUrl.replace(/\/$/, '')
+        }
+      }
+    } catch (e) {}
+
+    // 本地 Vite 開發且本機沒特別指定時
+    if (window.location.hostname === 'localhost' && window.location.port === '5173') {
+      return CLOUD_API_URL
     }
   }
-  return ''
+  return CLOUD_API_URL
 }
 
 const API_BASE = getBaseUrl()
+
 
 // 欄位名稱轉換輔助函數 (snake_case -> camelCase)
 const formatFuelFromBackend = (item) => ({

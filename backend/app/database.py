@@ -1,5 +1,4 @@
 import os
-import ssl
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -11,17 +10,15 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL, connect_args={"check_same_thread": False}
     )
 elif "tidbcloud.com" in DATABASE_URL or "ssl" in DATABASE_URL.lower():
-    # TiDB Cloud 強制要求 TLS 加密傳輸
-    ssl_context = ssl.create_default_context()
+    # TiDB Cloud 雲端 MySQL 需啟用 SSL 憑證驗證
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"ssl": ssl_context},
+        connect_args={"ssl": {}},
         pool_recycle=300,
         pool_pre_ping=True
     )
 else:
     engine = create_engine(DATABASE_URL, pool_recycle=3600, pool_pre_ping=True)
-
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
