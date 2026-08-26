@@ -1,68 +1,86 @@
-import json
-from sqlalchemy import Column, Integer, String, Float, Boolean, Date, DateTime, Text
-from sqlalchemy.sql import func
+import datetime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from .database import Base
 
+# 使用者資料表 (SaaS 多用戶支援)
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    username = Column(String(50), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # 關聯
+    vehicles = relationship("Vehicle", back_populates="owner", cascade="all, delete-orphan")
+    fuel_logs = relationship("FuelLog", back_populates="owner", cascade="all, delete-orphan")
+    maintenance_logs = relationship("MaintenanceLog", back_populates="owner", cascade="all, delete-orphan")
+    modifications = relationship("Modification", back_populates="owner", cascade="all, delete-orphan")
+
+# 車輛基礎設定
 class Vehicle(Base):
     __tablename__ = "vehicles"
 
-    id = Column(String(50), primary_key=True, index=True)
-    name = Column(String(100), default="Suzuki SUI 125")
-    brand = Column(String(100), default="SUZUKI")
-    model = Column(String(100), default="SUI 125")
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    name = Column(String(50), default="SUZUKI SUI 125")
+    plate_number = Column(String(20), default="MY-SUI125")
+    current_odo = Column(Integer, default=0)
     tank_capacity = Column(Float, default=5.5)
-    fuel_type = Column(String(20), default="92")
-    current_odo = Column(Integer, default=300)
-    license_plate = Column(String(50), default="ABC-1234")
-    note = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    fuel_type = Column(String(20), default="92 無鉛汽油")
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    owner = relationship("User", back_populates="vehicles")
+
+# 加油紀錄
 class FuelLog(Base):
     __tablename__ = "fuel_logs"
 
-    id = Column(String(50), primary_key=True, index=True)
-    vehicle_id = Column(String(50), index=True, default="sui-125-default")
-    date = Column(String(20), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    date = Column(String(20), nullable=False) # 格式 YYYY-MM-DD
     odometer = Column(Integer, nullable=False)
     liters = Column(Float, nullable=False)
-    price_per_liter = Column(Float, default=30.2)
+    price_per_liter = Column(Float, default=0.0)
     total_cost = Column(Float, nullable=False)
-    fuel_type = Column(String(20), default="92")
-    gas_station = Column(String(50), default="台灣中油")
-    trip_distance = Column(Integer, default=0)
-    efficiency = Column(Float, default=0.0)
-    full_tank = Column(Boolean, default=True)
+    is_full = Column(Integer, default=1) # 1: 加滿, 0: 未加滿
     note = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    owner = relationship("User", back_populates="fuel_logs")
+
+# 保養紀錄
 class MaintenanceLog(Base):
     __tablename__ = "maintenance_logs"
 
-    id = Column(String(50), primary_key=True, index=True)
-    vehicle_id = Column(String(50), index=True, default="sui-125-default")
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    item_id = Column(String(50), nullable=False) # 對應原廠項目 ID (如 oil, gear_oil)
     date = Column(String(20), nullable=False)
     odometer = Column(Integer, nullable=False)
-    title = Column(String(200), nullable=False)
-    shop_name = Column(String(100), default="SUZUKI 形象店")
     cost = Column(Float, default=0.0)
-    items_json = Column(Text, default="[]")  # JSON 格式字串
+    brand = Column(String(50), nullable=True) # 使用品牌/型號
     note = Column(Text, nullable=True)
-    receipt_image = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-class ModificationLog(Base):
-    __tablename__ = "modification_logs"
+    owner = relationship("User", back_populates="maintenance_logs")
 
-    id = Column(String(50), primary_key=True, index=True)
-    vehicle_id = Column(String(50), index=True, default="sui-125-default")
-    date = Column(String(20), nullable=False)
+# 改裝日誌
+class Modification(Base):
+    __tablename__ = "modifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    category = Column(String(30), nullable=False) # 外觀精品, 懸吊制動, 動力傳動, 實用機能
+    title = Column(String(100), nullable=False)
+    cost = Column(Float, default=0.0)
     odometer = Column(Integer, default=0)
-    title = Column(String(200), nullable=False)
-    category = Column(String(50), default="exterior")
-    cost = Column(Float, default=0.0)
-    bought_from = Column(String(100), nullable=True)
-    status = Column(String(50), default="installed")
-    rating = Column(Integer, default=5)
+    date = Column(String(20), nullable=False)
     note = Column(Text, nullable=True)
-    image_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now())
+    image_url = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    owner = relationship("User", back_populates="modifications")
+

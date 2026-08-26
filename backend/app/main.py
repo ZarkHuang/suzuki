@@ -1,25 +1,25 @@
 import os
 import json
 import uuid
-from typing import List
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+import datetime
+from typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from .database import engine, Base, get_db
-from . import models, schemas
+from . import models, schemas, database, auth
+from .database import engine, get_db
 
-# 自動初始化資料表
-Base.metadata.create_all(bind=engine)
+# 自動建立資料表 (含 users, user_id 關聯)
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Suzuki SUI 125 MotoLog API",
-    description="專為機車騎士打造的油耗、保養、改裝日誌與 AI 診斷後端服務",
-    version="1.0.0"
+    title="SUZUKI SUI 125 雲端多租戶 API",
+    version="2.0.0"
 )
 
-# 啟用 CORS 跨來源資源共享
+# CORS 設定 (允許 Vercel 前端與本地連線)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,10 +28,112 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 靜態上傳目錄
+# 靜態檔案目錄 (用於圖片上傳)
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+# ================= 身份驗證 API (SaaS 多用戶支援) =================
+@app.post("/api/auth/register", response_model=schemas.Token)
+def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
+    # 檢查 Email 是否已存在
+    existing = db.query(models.User).filter(models.User.email == user_in.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="該 Email 已被註冊，請直接登入")
+
+    # 建立新用戶
+    hashed_pwd = auth.get_password_hash(user_in.password)
+    new_user = models.User(
+        email=user_in.email,
+        username=user_in.username,
+        hashed_password=hashed_pwd
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # 建立該用戶的初始車輛
+    init_vehicle = models.Vehicle(
+        id=f"vehicle-{new_user.id}",
+        user_id=new_user.id,
+        name="SUZUKI SUI 125",
+        brand="SUZUKI",
+        model="SUI 125",
+        license_plate="MY-SUI125",
+        current_odo=300,
+        tank_capacity=5.5,
+        fuel_type="92"
+    )
+    db.add(init_vehicle)
+    db.commit()
+
+    # 簽發 JWT Token
+    access_token = auth.create_access_token(data={"sub": str(new_user.id)})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": new_user
+    }
+
+@app.post("/api/auth/login", response_model=schemas.Token)
+def login(user_in: schemas.UserLogin, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == user_in.email).first()
+    if not user or not auth.verify_password(user_in.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Email 或密碼錯誤")
+
+    access_token = auth.create_access_token(data={"sub": str(user.id)})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@app.post("/api/auth/google", response_model=schemas.Token)
+def google_auth(auth_in: schemas.GoogleAuthInput, db: Session = Depends(get_db)):
+    # 尋找是否已有該 Google Email 用戶
+    user = db.query(models.User).filter(models.User.email == auth_in.email).first()
+    if not user:
+        # 自動建立新用戶 (產生隨機安全密碼雜湊)
+        random_pwd = uuid.uuid4().hex
+        hashed_pwd = auth.get_password_hash(random_pwd)
+        user = models.User(
+            email=auth_in.email,
+            username=auth_in.name or "Google車主",
+            hashed_password=hashed_pwd
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # 建立該用戶專屬車輛
+        init_vehicle = models.Vehicle(
+            id=f"veh-{user.id}",
+            user_id=user.id,
+            name="SUZUKI SUI 125",
+            brand="SUZUKI",
+            model="SUI 125",
+            license_plate="MY-SUI125",
+            current_odo=300,
+            tank_capacity=5.5,
+            fuel_type="92"
+        )
+        db.add(init_vehicle)
+        db.commit()
+
+    # 簽發專屬 JWT Token
+    access_token = auth.create_access_token(data={"sub": str(user.id)})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
+
+@app.get("/api/auth/me", response_model=schemas.UserResponse)
+def get_me(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
+
+
 
 @app.get("/")
 def root():
@@ -41,14 +143,25 @@ def root():
         "docs_url": "/docs"
     }
 
-# ================= 車輛管理 =================
+# ================= 車輛管理 (多用戶隔離) =================
 @app.get("/api/vehicle", response_model=schemas.VehicleOut)
-def get_vehicle(db: Session = Depends(get_db)):
-    vehicle = db.query(models.Vehicle).first()
+def get_vehicle(
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.Vehicle)
+    if user:
+        vehicle = query.filter(models.Vehicle.user_id == user.id).first()
+    else:
+        vehicle = query.filter(models.Vehicle.user_id == None).first() or query.first()
+
     if not vehicle:
         # 建立預設 SUI 125 車輛
+        user_id = user.id if user else None
+        veh_id = f"veh-{user_id}" if user_id else "sui-125-default"
         default_vehicle = models.Vehicle(
-            id="sui-125-default",
+            id=veh_id,
+            user_id=user_id,
             name="Suzuki SUI 125",
             brand="SUZUKI",
             model="SUI 125 (UG125)",
@@ -65,28 +178,55 @@ def get_vehicle(db: Session = Depends(get_db)):
     return vehicle
 
 @app.post("/api/vehicle", response_model=schemas.VehicleOut)
-def update_vehicle(v: schemas.VehicleBase, db: Session = Depends(get_db)):
-    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == v.id).first()
+def update_vehicle(
+    v: schemas.VehicleBase, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    user_id = user.id if user else None
+    query = db.query(models.Vehicle)
+    if user_id:
+        vehicle = query.filter(models.Vehicle.user_id == user_id).first()
+    else:
+        vehicle = query.filter(models.Vehicle.id == v.id).first()
+
     if not vehicle:
-        vehicle = models.Vehicle(**v.model_dump())
+        v_data = v.model_dump()
+        v_data["user_id"] = user_id
+        vehicle = models.Vehicle(**v_data)
         db.add(vehicle)
     else:
         for key, val in v.model_dump().items():
-            setattr(vehicle, key, val)
+            if key != "id":
+                setattr(vehicle, key, val)
+        if user_id:
+            vehicle.user_id = user_id
     db.commit()
     db.refresh(vehicle)
     return vehicle
 
-# ================= 加油紀錄 =================
+# ================= 加油紀錄 (多用戶隔離) =================
 @app.get("/api/fuel", response_model=List[schemas.FuelLogOut])
-def get_fuel_logs(db: Session = Depends(get_db)):
-    return db.query(models.FuelLog).order_by(models.FuelLog.odometer.desc()).all()
+def get_fuel_logs(
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.FuelLog)
+    if user:
+        query = query.filter(models.FuelLog.user_id == user.id)
+    return query.order_by(models.FuelLog.odometer.desc()).all()
 
 @app.post("/api/fuel", response_model=schemas.FuelLogOut)
-def create_fuel_log(log: schemas.FuelLogBase, db: Session = Depends(get_db)):
+def create_fuel_log(
+    log: schemas.FuelLogBase, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    user_id = user.id if user else None
     log_id = log.id or f"fuel-{uuid.uuid4().hex[:8]}"
     db_log = models.FuelLog(
         id=log_id,
+        user_id=user_id,
         vehicle_id=log.vehicle_id or "sui-125-default",
         date=log.date,
         odometer=log.odometer,
@@ -103,7 +243,10 @@ def create_fuel_log(log: schemas.FuelLogBase, db: Session = Depends(get_db)):
     db.add(db_log)
 
     # 同步更新車輛里程
-    vehicle = db.query(models.Vehicle).first()
+    veh_query = db.query(models.Vehicle)
+    if user_id:
+        veh_query = veh_query.filter(models.Vehicle.user_id == user_id)
+    vehicle = veh_query.first()
     if vehicle and log.odometer > vehicle.current_odo:
         vehicle.current_odo = log.odometer
 
@@ -112,18 +255,31 @@ def create_fuel_log(log: schemas.FuelLogBase, db: Session = Depends(get_db)):
     return db_log
 
 @app.delete("/api/fuel/{log_id}")
-def delete_fuel_log(log_id: str, db: Session = Depends(get_db)):
-    db_log = db.query(models.FuelLog).filter(models.FuelLog.id == log_id).first()
+def delete_fuel_log(
+    log_id: str, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id)
+    if user:
+        query = query.filter(models.FuelLog.user_id == user.id)
+    db_log = query.first()
     if not db_log:
         raise HTTPException(status_code=404, detail="紀錄不存在")
     db.delete(db_log)
     db.commit()
     return {"message": "已成功刪除"}
 
-# ================= 保養紀錄 =================
+# ================= 保養紀錄 (多用戶隔離) =================
 @app.get("/api/maintenance", response_model=List[schemas.MaintenanceLogOut])
-def get_maintenance_logs(db: Session = Depends(get_db)):
-    logs = db.query(models.MaintenanceLog).order_by(models.MaintenanceLog.odometer.desc()).all()
+def get_maintenance_logs(
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.MaintenanceLog)
+    if user:
+        query = query.filter(models.MaintenanceLog.user_id == user.id)
+    logs = query.order_by(models.MaintenanceLog.odometer.desc()).all()
     result = []
     for l in logs:
         items_list = json.loads(l.items_json) if l.items_json else []
@@ -142,11 +298,17 @@ def get_maintenance_logs(db: Session = Depends(get_db)):
     return result
 
 @app.post("/api/maintenance", response_model=schemas.MaintenanceLogOut)
-def create_maintenance_log(log: schemas.MaintenanceLogBase, db: Session = Depends(get_db)):
+def create_maintenance_log(
+    log: schemas.MaintenanceLogBase, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    user_id = user.id if user else None
     log_id = log.id or f"maint-{uuid.uuid4().hex[:8]}"
     items_json = json.dumps(log.items or [], ensure_ascii=False)
     db_log = models.MaintenanceLog(
         id=log_id,
+        user_id=user_id,
         vehicle_id=log.vehicle_id or "sui-125-default",
         date=log.date,
         odometer=log.odometer,
@@ -159,7 +321,10 @@ def create_maintenance_log(log: schemas.MaintenanceLogBase, db: Session = Depend
     )
     db.add(db_log)
 
-    vehicle = db.query(models.Vehicle).first()
+    veh_query = db.query(models.Vehicle)
+    if user_id:
+        veh_query = veh_query.filter(models.Vehicle.user_id == user_id)
+    vehicle = veh_query.first()
     if vehicle and log.odometer > vehicle.current_odo:
         vehicle.current_odo = log.odometer
 
@@ -179,24 +344,44 @@ def create_maintenance_log(log: schemas.MaintenanceLogBase, db: Session = Depend
     )
 
 @app.delete("/api/maintenance/{log_id}")
-def delete_maintenance_log(log_id: str, db: Session = Depends(get_db)):
-    db_log = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.id == log_id).first()
+def delete_maintenance_log(
+    log_id: str, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.id == log_id)
+    if user:
+        query = query.filter(models.MaintenanceLog.user_id == user.id)
+    db_log = query.first()
     if not db_log:
         raise HTTPException(status_code=404, detail="紀錄不存在")
     db.delete(db_log)
     db.commit()
     return {"message": "已成功刪除"}
 
-# ================= 改裝日誌 =================
+
+# ================= 改裝日誌 (多用戶隔離) =================
 @app.get("/api/modifications", response_model=List[schemas.ModificationLogOut])
-def get_modifications(db: Session = Depends(get_db)):
-    return db.query(models.ModificationLog).order_by(models.ModificationLog.odometer.desc()).all()
+def get_modifications(
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.ModificationLog)
+    if user:
+        query = query.filter(models.ModificationLog.user_id == user.id)
+    return query.order_by(models.ModificationLog.odometer.desc()).all()
 
 @app.post("/api/modifications", response_model=schemas.ModificationLogOut)
-def create_modification(mod: schemas.ModificationLogBase, db: Session = Depends(get_db)):
+def create_modification(
+    mod: schemas.ModificationLogBase, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    user_id = user.id if user else None
     mod_id = mod.id or f"mod-{uuid.uuid4().hex[:8]}"
     db_mod = models.ModificationLog(
         id=mod_id,
+        user_id=user_id,
         vehicle_id=mod.vehicle_id or "sui-125-default",
         date=mod.date,
         odometer=mod.odometer or 0,
@@ -215,13 +400,21 @@ def create_modification(mod: schemas.ModificationLogBase, db: Session = Depends(
     return db_mod
 
 @app.delete("/api/modifications/{mod_id}")
-def delete_modification(mod_id: str, db: Session = Depends(get_db)):
-    db_mod = db.query(models.ModificationLog).filter(models.ModificationLog.id == mod_id).first()
+def delete_modification(
+    mod_id: str, 
+    db: Session = Depends(get_db),
+    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+):
+    query = db.query(models.ModificationLog).filter(models.ModificationLog.id == mod_id)
+    if user:
+        query = query.filter(models.ModificationLog.user_id == user.id)
+    db_mod = query.first()
     if not db_mod:
         raise HTTPException(status_code=404, detail="紀錄不存在")
     db.delete(db_mod)
     db.commit()
     return {"message": "已成功刪除"}
+
 
 # ================= 圖片上傳 API =================
 @app.post("/api/upload")

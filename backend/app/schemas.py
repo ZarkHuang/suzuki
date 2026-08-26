@@ -1,6 +1,39 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+import datetime
 
+# ================= 使用者與認證 Schemas =================
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class GoogleAuthInput(BaseModel):
+    email: EmailStr
+    name: str
+    sub: Optional[str] = None
+    picture: Optional[str] = None
+
+class Token(BaseModel):
+
+    access_token: str
+    token_type: str = "bearer"
+    user: "UserResponse"
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    username: str
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+# ================= 車輛相關 Schemas =================
 class VehicleBase(BaseModel):
     id: str
     name: str

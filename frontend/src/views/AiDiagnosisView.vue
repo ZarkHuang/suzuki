@@ -5,11 +5,9 @@ import {
   Bot, 
   Send, 
   Trash2, 
-  Sparkles, 
-  AlertTriangle, 
-  Wrench, 
   CheckCircle,
-  HelpCircle
+  RotateCcw,
+  Sparkles
 } from 'lucide-vue-next'
 
 const store = useMotoStore()
@@ -125,9 +123,24 @@ const sendQuery = async (text) => {
   }
 
   try {
-    const systemPrompt = `你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish 等車款) 的資深資深機車技師與保養顧問。
+    // 整理車輛即時客觀數據 (供 AI 交叉比對)
+    const recentMaints = store.maintenanceLogs.slice(0, 3).map(m => `${m.odometer}km [${m.title}] (${m.date})`).join('、') || '尚無紀錄'
+    const currentMods = store.modifications.map(mod => `【${mod.category}】${mod.title}`).join('、') || '無改裝 (原廠狀態)'
+    const avgEff = store.averageEfficiency > 0 ? `${store.averageEfficiency} km/L` : '尚無足夠數據'
+    
+    // 找出即期或異常的耗材
+    const urgentParts = store.partsStatusList.filter(p => p.status === 'critical' || p.status === 'warning').map(p => `${p.name}(已使用${p.distanceUsed}km)`).join('、') || '目前各耗材壽命良好'
+
+    const systemPrompt = `你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish 等車款) 的資深機車技師與保養顧問。
 請根據車主提問的車況異常、異音、保養里程或疑難雜症，給予親切、專業、條理分明的排查診斷與建議處置步驟。
-目前車輛資訊：車款「${store.vehicle.name || 'Suzuki SUI 125'}」，目前總累積里程「${store.currentOdometer} km」。`
+
+【車主愛車客觀數據 (請適時交叉比對診斷，若問題無關則無需贅述)】：
+- 車輛型號：${store.vehicle.name || 'Suzuki SUI 125'} (車牌: ${store.vehicle.licensePlate || '未設定'})
+- 目前總累積里程：${store.currentOdometer} km
+- 平均油耗表現：${avgEff}
+- 近期保養紀錄：${recentMaints}
+- 目前改裝項目清單：${currentMods}
+- 耗材健康度預警：${urgentParts}`
 
     const aiModel = genAI.getGenerativeModel({
       model: 'gemini-3.1-flash-lite-preview',
@@ -152,16 +165,23 @@ const sendQuery = async (text) => {
       ]
     })
 
-    // 組織歷史對話記憶 (Gemini 要求 history 第一條必須是 user)
+
+    // 組織歷史對話記憶 (Gemini 要求第一條必須為 user，且最多取最近 6 則作為滑動記憶視窗)
     const rawHistory = store.aiChatHistory.slice(0, -1) // 排除剛才 push 進去的那則
     const firstUserIdx = rawHistory.findIndex(m => m.role === 'user')
     let shortTermMemory = []
 
     if (firstUserIdx !== -1) {
-      shortTermMemory = rawHistory.slice(firstUserIdx).map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      }))
+      // 永遠只取最近 6 則，避免 Token 暴衝與對話雜訊
+      const recentHistory = rawHistory.slice(firstUserIdx).slice(-6)
+      // 若截斷後的第一則剛好是 model，再往後取一則確保第一則是 user
+      const validStartIdx = recentHistory.findIndex(m => m.role === 'user')
+      if (validStartIdx !== -1) {
+        shortTermMemory = recentHistory.slice(validStartIdx).map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        }))
+      }
     }
 
     const chat = aiModel.startChat({
@@ -170,10 +190,15 @@ const sendQuery = async (text) => {
 
     const result = await chat.sendMessage(q)
     const response = await result.response
-    const responseText = response.text()
+    let responseText = response.text()
+
+    // 檢查目前問答輪數 (若已超過 5 則，主動詢問是否解決並引導結案)
+    const userMsgCount = store.aiChatHistory.filter(m => m.role === 'user').length
+    if (userMsgCount >= 5) {
+      responseText += '\n\n---\n💡 **隨車技師提醒：** 本次問診已進行多次深度討論。請問您的問題是否已獲得妥善解答？若需探討其他新問題，建議點擊下方按鈕結案或開啟新問診，以獲得最精準的診斷喔！'
+    }
 
     store.addAiMessage('assistant', responseText)
-
   } catch (err) {
     console.error('Gemini 連線異常，啟用備援診斷庫:', err)
     const diagnosis = getOfflineDiagnosis(q)
@@ -186,6 +211,12 @@ const sendQuery = async (text) => {
     }
   }
 }
+
+// 結案並開啟新對話
+const finishAndResetSession = () => {
+  store.clearAiChat()
+}
+
 
 
 
@@ -255,7 +286,23 @@ const clearHistory = () => {
           <span class="thinking-text">小幫手正在分析車況...</span>
         </div>
       </div>
+
+      <!-- 主動結案卡片 (提問 3 則以上顯示) -->
+      <div v-if="store.aiChatHistory.filter(m => m.role === 'user').length >= 3 && !isThinking" class="session-actions-box">
+        <p class="session-hint">💡 請問您的車況疑難排解是否已獲得解答？</p>
+        <div class="session-btns">
+          <button class="btn-resolve" @click="finishAndResetSession">
+            <CheckCircle :size="15" />
+            問題已解決（歸檔重啟）
+          </button>
+          <button class="btn-new-topic" @click="finishAndResetSession">
+            <RotateCcw :size="15" />
+            換個新主題發問
+          </button>
+        </div>
+      </div>
     </div>
+
 
     <!-- 底部輸入框 -->
     <div class="input-bar-fixed">
@@ -450,10 +497,67 @@ const clearHistory = () => {
   40% { transform: translateY(-6px); }
 }
 
-.thinking-text {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+.session-actions-box {
+  margin: 16px 0 8px 0;
+  padding: 12px 16px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px dashed rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-md);
+  text-align: center;
 }
+
+.session-hint {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.session-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-resolve {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--color-success);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-resolve:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.btn-new-topic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-new-topic:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--color-primary);
+}
+
 
 /* 輸入框 */
 .input-bar-fixed {

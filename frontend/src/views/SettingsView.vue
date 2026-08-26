@@ -12,8 +12,12 @@ import {
   Save, 
   Info,
   Check,
-  Smartphone
+  Smartphone,
+  User,
+  LogIn,
+  LogOut
 } from 'lucide-vue-next'
+
 
 const store = useMotoStore()
 
@@ -103,12 +107,47 @@ const importBackup = (e) => {
       </button>
     </div>
 
+    <!-- 車主帳號與 SaaS 雲端同步 -->
+    <div class="card settings-section auth-card">
+      <div class="section-heading">
+        <User :size="18" class="icon-blue" />
+        <h3>車主帳號 (SaaS 雲端多租戶)</h3>
+      </div>
+
+      <div v-if="store.isAuthenticated" class="user-profile-box">
+        <div class="user-avatar-circle">
+          {{ store.currentUser?.username?.charAt(0) || 'U' }}
+        </div>
+        <div class="user-info-text">
+          <div class="user-name-row">
+            <span class="user-name">{{ store.currentUser?.username }}</span>
+            <span class="badge-cloud">雲端資料庫已綁定</span>
+          </div>
+          <span class="user-email">{{ store.currentUser?.email }}</span>
+        </div>
+        <button class="btn btn-outline-danger btn-sm" @click="store.logout">
+          <LogOut :size="15" /> 登出帳號
+        </button>
+      </div>
+
+      <div v-else class="guest-box">
+        <div class="guest-text">
+          <p class="guest-title">目前為訪客離線模式</p>
+          <p class="guest-desc">登入或免費註冊後，您的 SUI 125 數據將 24 小時安全獨立存儲於雲端，換手機或跨電腦使用皆可無縫同步！</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @click="store.openAuthModal">
+          <LogIn :size="16" /> 立即登入 / 註冊
+        </button>
+      </div>
+    </div>
+
     <!-- 車輛基本資料 -->
     <div class="card settings-section">
       <div class="section-heading">
         <Bike :size="18" class="icon-blue" />
         <h3>車輛基本資訊</h3>
       </div>
+
 
       <div class="form-row">
         <div class="form-group flex-1">
@@ -357,4 +396,97 @@ const importBackup = (e) => {
   padding-left: 18px;
   line-height: 1.6;
 }
+
+/* SaaS 車主卡片樣式 */
+.auth-card {
+  border: 1px solid rgba(0, 210, 255, 0.25);
+  background: linear-gradient(145deg, rgba(0, 210, 255, 0.04), rgba(20, 23, 31, 0.6));
+}
+
+.user-profile-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.user-avatar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00d2ff, #0077ff);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+}
+
+.user-info-text {
+  flex: 1;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.user-name {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.badge-cloud {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-weight: 600;
+}
+
+.user-email {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.btn-outline-danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-outline-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.guest-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.guest-title {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.guest-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
 </style>
+

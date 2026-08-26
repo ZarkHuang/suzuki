@@ -3,26 +3,34 @@ import { VEHICLE_DEFAULTS, OFFICIAL_MAINTENANCE_SCHEDULE, PARTS_LIFECYCLE_GUIDE 
 import { api } from '../services/api'
 
 const STORAGE_KEY = 'suzuki_sui_motolog_v1'
+const AUTH_STORAGE_KEY = 'suzuki_sui_motolog_auth'
 
 export const useMotoStore = defineStore('moto', {
   state: () => {
-    // 嘗試從 LocalStorage 讀取初始資料
+    // 嘗試從 LocalStorage 讀取初始資料與 Auth 狀態
     let localData = null
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      try {
-        localData = JSON.parse(saved)
-      } catch (e) {
-        console.error('Failed to parse local state', e)
-      }
+    let authData = null
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) localData = JSON.parse(saved)
+      const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+      if (savedAuth) authData = JSON.parse(savedAuth)
+    } catch (e) {
+      console.error('Failed to parse local state', e)
     }
 
     return {
       isBackendOnline: false,
       isSyncing: false,
+      isAuthModalOpen: false,
+
+      // 使用者登入狀態 (SaaS)
+      authToken: authData?.token || null,
+      currentUser: authData?.user || null,
 
       // 車輛基本資訊
       vehicle: localData?.vehicle || { ...VEHICLE_DEFAULTS },
+
       
       // 加油紀錄
       fuelLogs: localData?.fuelLogs || [
@@ -126,12 +134,14 @@ export const useMotoStore = defineStore('moto', {
 
   getters: {
     currentOdometer: (state) => {
-      let maxOdo = state.vehicle.currentOdo || 0
-      state.fuelLogs.forEach(l => { if (l.odometer > maxOdo) maxOdo = l.odometer })
-      state.maintenanceLogs.forEach(m => { if (m.odometer > maxOdo) maxOdo = m.odometer })
-      state.modifications.forEach(mod => { if (mod.odometer > maxOdo) maxOdo = mod.odometer })
+      // 若車主有主動設定 currentOdo，以車主最新設定或所有紀錄的最大值為準
+      let maxOdo = Number(state.vehicle.currentOdo || 0)
+      state.fuelLogs.forEach(l => { if (Number(l.odometer) > maxOdo) maxOdo = Number(l.odometer) })
+      state.maintenanceLogs.forEach(m => { if (Number(m.odometer) > maxOdo) maxOdo = Number(m.odometer) })
+      state.modifications.forEach(mod => { if (Number(mod.odometer) > maxOdo) maxOdo = Number(mod.odometer) })
       return maxOdo
     },
+
 
     averageEfficiency: (state) => {
       const validLogs = state.fuelLogs.filter(l => l.efficiency && l.efficiency > 0)
@@ -202,12 +212,82 @@ export const useMotoStore = defineStore('moto', {
           status: usageRatio >= 0.9 ? 'critical' : usageRatio >= 0.7 ? 'warning' : 'good'
         }
       })
-    }
+    },
+
+    isAuthenticated: (state) => !!state.authToken && !!state.currentUser,
   },
 
+
   actions: {
+    // 開關登入彈窗
+    openAuthModal() {
+      this.isAuthModalOpen = true
+    },
+    closeAuthModal() {
+      this.isAuthModalOpen = false
+    },
+
+    // 登入
+    async login(email, password) {
+      try {
+        const res = await api.login(email, password)
+        this.authToken = res.access_token
+        this.currentUser = res.user
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
+        this.closeAuthModal()
+        // 重新從雲端抓取該帳號專屬資料
+        await this.initSyncWithBackend()
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err.message }
+      }
+    },
+
+    // Google 一鍵登入
+    async loginWithGoogle(email, name, sub, picture) {
+      try {
+        const res = await api.loginWithGoogle(email, name, sub, picture)
+        this.authToken = res.access_token
+        this.currentUser = res.user
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
+        this.closeAuthModal()
+        // 重新從雲端抓取該帳號專屬資料
+        await this.initSyncWithBackend()
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err.message }
+      }
+    },
+
+
+    // 註冊
+    async register(username, email, password) {
+      try {
+        const res = await api.register(username, email, password)
+        this.authToken = res.access_token
+        this.currentUser = res.user
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
+        this.closeAuthModal()
+        // 重新從雲端抓取該帳號專屬資料
+        await this.initSyncWithBackend()
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err.message }
+      }
+    },
+
+    // 登出
+    logout() {
+      this.authToken = null
+      this.currentUser = null
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      // 重新拉取或重置
+      this.initSyncWithBackend()
+    },
+
     // 初始化並從後端 MySQL 拉取最新資料 (MySQL 為準)
     async initSyncWithBackend() {
+
       this.isSyncing = true
       try {
         const online = await api.checkHealth()
@@ -315,16 +395,17 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // 更新里程
+    // 更新里程 (直接以使用者輸入為準)
     updateOdometer(newOdo) {
       if (newOdo !== undefined && newOdo !== null) {
-        this.vehicle.currentOdo = Math.max(this.vehicle.currentOdo || 0, Number(newOdo))
+        this.vehicle.currentOdo = Number(newOdo)
         this.persist()
         if (this.isBackendOnline) {
           api.updateVehicle(this.vehicle).catch(() => {})
         }
       }
     },
+
 
 
     // 新增加油紀錄 (雙寫 LocalStorage + MySQL)

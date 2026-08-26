@@ -23,6 +23,23 @@ const getBaseUrl = () => {
 
 const API_BASE = getBaseUrl()
 
+// 取得 JWT 認證 Header
+const getAuthHeaders = () => {
+  const headers = { 'Content-Type': 'application/json' }
+  try {
+    const saved = localStorage.getItem('suzuki_sui_motolog_auth')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (parsed.token) {
+        headers['Authorization'] = `Bearer ${parsed.token}`
+      }
+    }
+  } catch (e) {}
+  return headers
+}
+
+
+
 
 // 欄位名稱轉換輔助函數 (snake_case -> camelCase)
 const formatFuelFromBackend = (item) => ({
@@ -70,6 +87,56 @@ const formatModFromBackend = (item) => ({
 })
 
 export const api = {
+  // 身份驗證 API (SaaS 多用戶支援)
+  async register(username, email, password) {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || '註冊失敗')
+    }
+    return res.json()
+  },
+
+  async login(email, password) {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || '登入失敗')
+    }
+    return res.json()
+  },
+
+  async loginWithGoogle(email, name, sub, picture) {
+    const res = await fetch(`${API_BASE}/api/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name, sub, picture })
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || 'Google 登入失敗')
+    }
+    return res.json()
+  },
+
+
+  async getMe() {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: getAuthHeaders(),
+      cache: 'no-cache'
+    })
+    if (!res.ok) throw new Error('未登入或憑證已過期')
+    return res.json()
+  },
+
   // 健康檢查
   async checkHealth() {
     try {
@@ -82,7 +149,10 @@ export const api = {
 
   // 車輛
   async getVehicle() {
-    const res = await fetch(`${API_BASE}/api/vehicle`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/api/vehicle`, {
+      headers: getAuthHeaders(),
+      cache: 'no-cache'
+    })
     if (!res.ok) throw new Error('Failed to fetch vehicle')
     const data = await res.json()
     return {
@@ -112,7 +182,7 @@ export const api = {
     }
     const res = await fetch(`${API_BASE}/api/vehicle`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error('Failed to update vehicle')
@@ -121,31 +191,33 @@ export const api = {
 
   // 加油紀錄
   async getFuelLogs() {
-    const res = await fetch(`${API_BASE}/api/fuel`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/api/fuel`, {
+      headers: getAuthHeaders(),
+      cache: 'no-cache'
+    })
     if (!res.ok) throw new Error('Failed to fetch fuel logs')
     const list = await res.json()
     return list.map(formatFuelFromBackend)
   },
 
-  async createFuelLog(data) {
+  async createFuelLog(log) {
     const payload = {
-      id: data.id,
-      vehicle_id: data.vehicleId || 'sui-125-default',
-      date: data.date,
-      odometer: Number(data.odometer),
-      liters: Number(data.liters),
-      price_per_liter: Number(data.pricePerLiter || 30.2),
-      total_cost: Number(data.totalCost),
-      fuel_type: data.fuelType,
-      gas_station: data.gasStation,
-      trip_distance: Number(data.tripDistance || 0),
-      efficiency: Number(data.efficiency || 0),
-      full_tank: data.fullTank,
-      note: data.note
+      id: log.id,
+      date: log.date,
+      odometer: Number(log.odometer),
+      liters: Number(log.liters),
+      price_per_liter: Number(log.pricePerLiter || 30.2),
+      total_cost: Number(log.totalCost || 0),
+      fuel_type: log.fuelType || '92',
+      gas_station: log.gasStation || '台灣中油',
+      trip_distance: Number(log.tripDistance || 0),
+      efficiency: Number(log.efficiency || 0),
+      full_tank: log.fullTank !== false,
+      note: log.note || ''
     }
     const res = await fetch(`${API_BASE}/api/fuel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error('Failed to create fuel log')
@@ -153,35 +225,40 @@ export const api = {
   },
 
   async deleteFuelLog(id) {
-    const res = await fetch(`${API_BASE}/api/fuel/${id}`, { method: 'DELETE' })
+    const res = await fetch(`${API_BASE}/api/fuel/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    })
     if (!res.ok) throw new Error('Failed to delete fuel log')
     return res.json()
   },
 
   // 保養紀錄
   async getMaintenanceLogs() {
-    const res = await fetch(`${API_BASE}/api/maintenance`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/api/maintenance`, {
+      headers: getAuthHeaders(),
+      cache: 'no-cache'
+    })
     if (!res.ok) throw new Error('Failed to fetch maintenance logs')
     const list = await res.json()
     return list.map(formatMaintFromBackend)
   },
 
-  async createMaintenanceLog(data) {
+  async createMaintenanceLog(log) {
     const payload = {
-      id: data.id,
-      vehicle_id: data.vehicleId || 'sui-125-default',
-      date: data.date,
-      odometer: Number(data.odometer),
-      title: data.title,
-      shop_name: data.shopName,
-      cost: Number(data.cost || 0),
-      items: data.items || [],
-      note: data.note,
-      receipt_image: data.receiptImage
+      id: log.id,
+      date: log.date,
+      odometer: Number(log.odometer),
+      title: log.title,
+      shop_name: log.shopName || 'SUZUKI 形象店',
+      cost: Number(log.cost || 0),
+      items: log.items || [],
+      note: log.note || '',
+      receipt_image: log.receiptImage || ''
     }
     const res = await fetch(`${API_BASE}/api/maintenance`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error('Failed to create maintenance log')
@@ -189,37 +266,42 @@ export const api = {
   },
 
   async deleteMaintenanceLog(id) {
-    const res = await fetch(`${API_BASE}/api/maintenance/${id}`, { method: 'DELETE' })
+    const res = await fetch(`${API_BASE}/api/maintenance/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    })
     if (!res.ok) throw new Error('Failed to delete maintenance log')
     return res.json()
   },
 
   // 改裝日誌
   async getModifications() {
-    const res = await fetch(`${API_BASE}/api/modifications`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/api/modifications`, {
+      headers: getAuthHeaders(),
+      cache: 'no-cache'
+    })
     if (!res.ok) throw new Error('Failed to fetch modifications')
     const list = await res.json()
     return list.map(formatModFromBackend)
   },
 
-  async createModification(data) {
+  async createModification(mod) {
     const payload = {
-      id: data.id,
-      vehicle_id: data.vehicleId || 'sui-125-default',
-      date: data.date,
-      odometer: Number(data.odometer || 0),
-      title: data.title,
-      category: data.category,
-      cost: Number(data.cost || 0),
-      bought_from: data.boughtFrom,
-      status: data.status,
-      rating: Number(data.rating || 5),
-      note: data.note,
-      image_url: data.imageUrl
+      id: mod.id,
+      date: mod.date,
+      odometer: Number(mod.odometer || 0),
+      title: mod.title,
+      category: mod.category || 'exterior',
+      cost: Number(mod.cost || 0),
+      bought_from: mod.boughtFrom || '',
+      status: mod.status || 'installed',
+      rating: Number(mod.rating || 5),
+      note: mod.note || '',
+      image_url: mod.imageUrl || ''
     }
     const res = await fetch(`${API_BASE}/api/modifications`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error('Failed to create modification')
@@ -227,7 +309,10 @@ export const api = {
   },
 
   async deleteModification(id) {
-    const res = await fetch(`${API_BASE}/api/modifications/${id}`, { method: 'DELETE' })
+    const res = await fetch(`${API_BASE}/api/modifications/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    })
     if (!res.ok) throw new Error('Failed to delete modification')
     return res.json()
   },

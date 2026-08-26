@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMotoStore } from '../stores/motoStore'
-import { Bell, Settings, Gauge, Sparkles } from 'lucide-vue-next'
+import { Bell, Settings, Gauge, Sparkles, User, LogIn } from 'lucide-vue-next'
 
 const router = useRouter()
 const store = useMotoStore()
@@ -34,7 +34,6 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
               <span class="status-dot"></span>
               {{ store.isSyncing ? '同步中' : (store.isBackendOnline ? 'MySQL' : '離線') }}
             </span>
-
           </div>
         </div>
       </div>
@@ -53,6 +52,18 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
           <span class="maint-km-text">{{ nextMaint.remainingKm > 0 ? `${nextMaint.remainingKm}km` : '需保養' }}</span>
         </div>
 
+        <!-- SaaS 車主登入 / 個人資訊按鈕 -->
+        <button 
+          class="btn-user-auth" 
+          :class="{ 'logged-in': store.isAuthenticated }"
+          :title="store.isAuthenticated ? `已登入：${store.currentUser?.username}` : '登入/註冊專屬車庫'"
+          @click="store.isAuthenticated ? router.push('/settings') : store.openAuthModal()"
+        >
+          <User v-if="store.isAuthenticated" :size="16" />
+          <LogIn v-else :size="16" />
+          <span class="user-auth-label">{{ store.isAuthenticated ? (store.currentUser?.username || '車主') : '登入' }}</span>
+        </button>
+
         <!-- 前往設定 -->
         <button class="btn-icon" @click="router.push('/settings')" title="系統設定">
           <Settings :size="18" />
@@ -61,6 +72,7 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
     </div>
   </header>
 </template>
+
 
 <style scoped>
 .app-header {
@@ -205,7 +217,41 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
   box-shadow: 0 0 10px var(--suzuki-red-glow);
 }
 
+.btn-user-auth {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 210, 255, 0.1);
+  border: 1px solid rgba(0, 210, 255, 0.3);
+  color: var(--color-primary);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-user-auth:hover {
+  background: rgba(0, 210, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-user-auth.logged-in {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.user-auth-label {
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .btn-icon {
+
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);

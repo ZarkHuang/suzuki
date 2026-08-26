@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import Header from './components/Header.vue'
 import NavBar from './components/NavBar.vue'
+import AuthModal from './components/AuthModal.vue'
 import { useMotoStore } from './stores/motoStore'
 
 const store = useMotoStore()
@@ -10,7 +11,6 @@ onMounted(() => {
   store.initSyncWithBackend()
 })
 </script>
-
 
 <template>
   <div class="app-root">
@@ -31,8 +31,12 @@ onMounted(() => {
 
     <!-- 底部導航列 -->
     <NavBar />
+
+    <!-- SaaS 登入 / 註冊彈窗 -->
+    <AuthModal />
   </div>
 </template>
+
 
 <style>
 .app-root {
