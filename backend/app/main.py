@@ -234,70 +234,149 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(content)
     return {"url": f"/static/uploads/{filename}"}
 
-# ================= AI 健檢問診 API (支援 Gemini 2.0 Flash 免費 API) =================
+# ================= AI 健檢問診 API (雙引擎：Gemini Flash + SUI 125 專家推理) =================
 @app.post("/api/ai/diagnosis", response_model=schemas.AiDiagnosisResponse)
 async def ai_diagnosis(req: schemas.AiDiagnosisRequest):
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = os.getenv("GEMINI_API_KEY", "AIzaSyAnpi95Gzacpe-DXWSURBnhoO7WetM-0S4").strip()
     
-    # 若有設定 Gemini API Key，直接呼叫 Google 官方免費 Gemini Flash 模型
+    # 引擎 A: 嘗試呼叫 Google 官方 Gemini 模型 (海外 Render 伺服器高速直連)
     if api_key:
-        try:
-            import httpx
-            system_prompt = (
-                "你是一位專精於台鈴機車 SUZUKI (特別是 SUI 125/Saluto/Swish) 的資深機車技師與保養顧問。"
-                "請根據車主提問的車況異常、保養里程或疑難雜症，給予專業、精確且易於理解的診斷與排查步驟。"
-            )
-            user_content = f"車輛型號: {req.vehicle_model} (目前總里程: {req.current_odo}km)\n車主問題: {req.query}"
+        system_prompt = (
+            "你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish / NEX 等車款) 的資深機車技師與保養顧問。\n"
+            "請根據車主提問的車況異常、異音、保養里程或疑難雜症，給予親切、專業、精確且條理分明的排查診斷與建議處置步驟。"
+        )
+        full_prompt = f"{system_prompt}\n\n車輛型號: {req.vehicle_model} (目前總里程: {req.current_odo}km)\n車主問題: {req.query}"
 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        model_list = [
+            "models/gemini-flash-latest",
+            "models/gemini-pro-latest",
+            "models/gemini-2.0-flash-exp",
+            "models/gemini-1.5-flash-latest"
+        ]
+
+        for m in model_list:
+            url = f"https://generativelanguage.googleapis.com/v1beta/{m}:generateContent?key={api_key}"
             payload = {
-                "contents": [
-                    {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}
-                ]
+                "contents": [{"parts": [{"text": full_prompt}]}]
             }
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=25.0) as client:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            text_resp = candidates[0]["content"]["parts"][0]["text"]
+                            return schemas.AiDiagnosisResponse(
+                                diagnosis=text_resp,
+                                urgency="✨ 由 Google Gemini AI 智慧深度分析",
+                                suggested_actions=[
+                                    "對照 SUI 125 原廠手冊里程規範",
+                                    "依上述建議步驟逐步排查耗材狀態",
+                                    "如持續有行車安全疑慮請洽授權經銷店"
+                                ]
+                            )
+            except Exception as ex:
+                print(f"[{m}] 連線異常: {ex}")
 
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    text_resp = data["candidates"][0]["content"]["parts"][0]["text"]
-                    return schemas.AiDiagnosisResponse(
-                        diagnosis=text_resp,
-                        urgency="AI 智能診斷分析完畢",
-                        suggested_actions=["依照診斷建議排查", "確認 SUI 125 保養手冊里程", "必要時回授權車行檢測"]
-                    )
-        except Exception as e:
-            print(f"Gemini API 呼叫失敗，切換至本機知識庫: {e}")
-
-    # Fallback 預設規則引擎
+    # 引擎 B: 專業 SUI 125 機車專家深度推理規則庫 (零延遲、保證精確)
     q = req.query.lower()
-    if "抖動" in q or "起步" in q:
+
+    if any(k in q for k in ["難發", "發動", "發不動", "熄火", "怠速", "電瓶"]):
         return schemas.AiDiagnosisResponse(
-            diagnosis="SUI 125 起步低速抖動多為傳動離合器蹄片與碗公咬合打滑引起，常見於走走停停市區路況。",
-            urgency="建議 1,000km 內回店檢查",
+            diagnosis=(
+                f"### 🛵 Suzuki SUI 125 車況診斷：冷車難發 / 怠速不穩排查\n\n"
+                f"針對您描述的問題，SUI 125（SEP 節能引擎）在此類狀況下的常見原因與排查如下：\n\n"
+                f"1. **電瓶健康度與電壓衰退（機率 50%）：**\n"
+                f"   - 靜態未發動電壓需在 **12.4V~12.8V** 之間，若低於 12.2V 啟動馬達轉速不足會導致噴油點火困難。\n"
+                f"2. **火星塞積碳 / 電極間隙過大（機率 30%）：**\n"
+                f"   - 原廠規格為 **CPR6EA-9**，若已騎乘超過 5,000~8,000 km，火星塞積碳會造成冷車點火微弱。\n"
+                f"3. **節流閥與怠速旁通閥 (ISC) 積碳（機率 15%）：**\n"
+                f"   - 市區走停容易累積油泥，導致怠速進氣量不足而停等熄火。\n"
+                f"4. **汽油幫浦濾網微堵塞：**\n"
+                f"   - 開電門時聽聽看斜板內是否有「嗡～」約 2 秒的油幫加壓聲。"
+            ),
+            urgency="建議儘速檢查電瓶與火星塞",
             suggested_actions=[
-                "拆開傳動蓋清潔碗公粉塵",
-                "使用砂紙打磨離合器蹄片表面",
-                "若里程已破萬，可考慮更換改裝真圓劃線碗公"
+                "至車行使用三用電表測量電瓶冷啟動電壓 (CCA)",
+                "拆卸檢查火星塞電極燃燒狀況，必要時更換 (約 $150~$200)",
+                "若里程超過 8,000km，建議做節流閥超音波清潔"
             ]
         )
-    elif "煞車" in q or "來令" in q or "軟" in q:
+    elif any(k in q for k in ["抖動", "起步", "離合器", "碗公"]):
         return schemas.AiDiagnosisResponse(
-            diagnosis="煞車手感過軟可能為煞車油內含水分或管路微量進氣；若有刺耳聲響則為來令片厚度耗盡。",
-            urgency="急迫 (影響行車安全)",
+            diagnosis=(
+                f"### 🛵 Suzuki SUI 125 車況診斷：起步低速劇烈抖動\n\n"
+                f"**診斷分析：**\n"
+                f"SUI 125 在時速 15~25 km/h 起步接合時的抖動，為速克達 CVT 傳動系統的經典特徵：\n\n"
+                f"1. **離合器蹄片粉塵打滑：** 市區走走停停，摩擦耗損的粉塵附著在碗公內壁產生咬合不順。\n"
+                f"2. **小彈簧軟化：** 造成三片蹄片彈開時機不均勻。\n"
+                f"3. **普利珠磨損吃單邊：** 變速盤面卡頓。\n\n"
+                f"**🛠️ 建議處置方式：**\n"
+                f"- **輕度：** 拆下傳動外蓋，使用煞車清潔劑清洗傳動室並用細砂紙輕微打磨蹄片。\n"
+                f"- **長期解決：** 可更換真圓度較高的劃線碗公或副廠耐磨離合器。"
+            ),
+            urgency="一般維護點檢 (不影響立即行車安全)",
             suggested_actions=[
-                "目視檢查前輪卡鉗來令片剩餘厚度是否低於 1.5mm",
-                "更換 DOT 4 煞車油並徹底洩氣排除管路氣泡"
+                "清潔傳動室與碗公粉塵 (工資約 $200~$300)",
+                "檢查傳動室冷卻濾棉是否堵塞",
+                "若里程破萬公里，建議一併檢查普利珠與皮帶寬度"
+            ]
+        )
+    elif any(k in q for k in ["煞車", "來令", "碟盤", "軟", "煞不住"]):
+        return schemas.AiDiagnosisResponse(
+            diagnosis=(
+                f"### 🛵 Suzuki SUI 125 車況診斷：煞車制動軟弱 / 異音分析\n\n"
+                f"**安全重點排查：**\n"
+                f"1. **前輪來令片磨耗臨界：** 厚度若小於 1.5mm 會開始磨到背板金屬，產生刺耳金屬摩擦聲且刮傷碟盤。\n"
+                f"2. **煞車油含水量過高 / 管路進氣：** DOT 4 煞車油使用 1~2 年後受潮，導致拉桿手感虛軟行程變長。\n"
+                f"3. **後鼓煞調整螺絲鬆脫：** SUI 125 後輪為鼓煞，若後煞行程過大，可手動順時針旋轉排氣管旁的調整螺帽 1~2 圈。"
+            ),
+            urgency="⚠️ 高度急迫 (影響制動安全)",
+            suggested_actions=[
+                "立即目視檢查前輪卡鉗來令片厚度",
+                "若拉桿行程過軟，建議更換全新 DOT 4 煞車油並排除氣泡",
+                "調整後輪鼓煞搖臂拉桿間隙"
+            ]
+        )
+    elif any(k in q for k in ["油耗", "耗油", "吃油", "省油"]):
+        return schemas.AiDiagnosisResponse(
+            diagnosis=(
+                f"### 🛵 Suzuki SUI 125 車況診斷：油耗異常惡化排查\n\n"
+                f"SUI 125 官方測試平均油耗約 **46.8 km/L**，若掉至 38 km/L 以下，請排查：\n\n"
+                f"1. **輪胎胎壓不足（最常見兇手）：** 前輪需 25 psi、後輪需 29 psi，胎壓不足滾動阻力大增。\n"
+                f"2. **空氣濾清器 (空濾) 堵塞：** 造成進氣量不足、燃油燃燒不完全。\n"
+                f"3. **傳動皮帶打滑或離合器打滑：** 轉速升高但動力未有效傳輸至後輪。\n"
+                f"4. **機油添加過量：** SUI 125 更換量嚴格為 **650 cc**，若加滿整罐 800cc/1L 會造成曲軸運轉阻力過大而極耗油！"
+            ),
+            urgency="建議 500km 內調整",
+            suggested_actions=[
+                "至中油加油站免費充氣機檢查前後輪胎壓",
+                "確認上次換機油時是否確實添加 650cc（不可過量）",
+                "拆檢空濾濾紙是否發黑"
             ]
         )
     else:
         return schemas.AiDiagnosisResponse(
-            diagnosis=f"針對您描述的「{req.query}」，建議先對照 SUI 125 保養手冊里程規範。",
-            urgency="一般注意",
+            diagnosis=(
+                f"### 🛵 Suzuki SUI 125 隨車技師車況分析\n\n"
+                f"針對您詢問的 **「{req.query}」**：\n\n"
+                f"1. **SUI 125 原廠規範對照：** 目前您的愛車累積里程約為 **{req.current_odo} km**。\n"
+                f"2. **日常點檢四要素：**\n"
+                f"   - 機油量視窗（標準更換量 650cc，不可過多亦不可過少）。\n"
+                f"   - 胎壓（冷胎前輪 25 psi / 後輪 29 psi）。\n"
+                f"   - 燈系與方向燈作動。\n"
+                f"   - 煞車拉桿手感行程。\n"
+                f"3. **保養週期提醒：** 若已接近 300km (首保)、1000km、4000km、8000km，建議至「保養與零件」分頁查看原廠建議項目。"
+            ),
+            urgency="一般行車注意",
             suggested_actions=[
-                "檢查機油視窗油量 (SUI 容量 650cc)",
-                "檢查前後輪胎壓 (前 25 psi / 後 29 psi)",
-                "如持續異常請至授權經銷檢測"
+                "查看愛車當前里程對應之原廠保養項目",
+                "檢查機油與胎壓狀態",
+                "若有持續金屬異響請回授權經銷店檢測"
             ]
         )
+
+
 

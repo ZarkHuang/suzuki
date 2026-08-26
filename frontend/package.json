@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "lucide-vue-next": "^1.0.0",

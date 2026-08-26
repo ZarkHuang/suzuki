@@ -295,6 +295,26 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
+    // 更新車輛與設定資訊 (雙寫 LocalStorage + MySQL)
+    async updateVehicleSettings(newVehicle, newSettings) {
+      if (newVehicle) {
+        this.vehicle = { ...this.vehicle, ...newVehicle }
+      }
+      if (newSettings) {
+        this.settings = { ...this.settings, ...newSettings }
+      }
+      this.persist()
+
+      if (this.isBackendOnline) {
+        try {
+          await api.updateVehicle(this.vehicle)
+          console.log('✅ 車輛設定已成功更新至 MySQL！')
+        } catch (e) {
+          console.error('更新車輛至 MySQL 失敗:', e)
+        }
+      }
+    },
+
     // 更新里程
     updateOdometer(newOdo) {
       if (newOdo !== undefined && newOdo !== null) {
@@ -305,6 +325,7 @@ export const useMotoStore = defineStore('moto', {
         }
       }
     },
+
 
     // 新增加油紀錄 (雙寫 LocalStorage + MySQL)
     async addFuelLog(log) {

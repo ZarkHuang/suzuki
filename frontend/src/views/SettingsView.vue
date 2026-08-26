@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
+import { api } from '../services/api'
 import { 
   Settings, 
   Bike, 
@@ -30,7 +31,7 @@ const requestNotificationPermission = async () => {
   if (perm === 'granted') {
     new Notification('SUZUKI SUI 125 機車管家', {
       body: '保養提醒推播通知已成功開啟！',
-      icon: '/pwa-192x192.png'
+      icon: '/icon.svg'
     })
     settings.value.enableNotifications = true
   } else {
@@ -38,16 +39,27 @@ const requestNotificationPermission = async () => {
   }
 }
 
-// 儲存設定
-const saveSettings = () => {
-  store.vehicle = { ...vehicle.value }
-  store.settings = { ...settings.value }
+// 儲存設定 (同時寫入 LocalStorage 與發送 API 至 MySQL)
+const saveSettings = async () => {
+  store.vehicle = { ...store.vehicle, ...vehicle.value }
+  store.settings = { ...store.settings, ...settings.value }
   store.persist()
+
+  // 直接調用 API 寫入 MySQL
+  try {
+    await api.updateVehicle(store.vehicle)
+    console.log('✅ [API] 車輛設定已成功更新至 MySQL！')
+  } catch (err) {
+    console.warn('⚠️ 更新車輛至後端失敗 (離線模式):', err)
+  }
+
   saveSuccess.value = true
   setTimeout(() => {
     saveSuccess.value = false
   }, 2000)
 }
+
+
 
 // 匯出 JSON 備份
 const exportBackup = () => {
