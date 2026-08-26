@@ -312,8 +312,7 @@ const clearHistory = () => {
   flex-direction: column;
   gap: 12px;
   padding-right: 4px;
-  /* 預留底部輸入框與導航列空間，避免最後一則訊息被遮擋 */
-  padding-bottom: 75px;
+  margin-bottom: 60px;
 }
 
 .message-row {
@@ -397,18 +396,16 @@ const clearHistory = () => {
   color: var(--text-muted);
 }
 
-/* 底部輸入框 (動態避開 iPhone 底部小白條與 Bottom Nav Bar) */
+/* 輸入框 */
 .input-bar-fixed {
   position: fixed;
-  bottom: calc(52px + max(10px, env(safe-area-inset-bottom)));
+  bottom: 64px;
   left: 0;
   right: 0;
   z-index: 95;
-  background: rgba(10, 12, 16, 0.96);
+  background: rgba(10, 12, 16, 0.95);
   padding: 8px 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
 }
 
 .input-inner {
@@ -419,10 +416,8 @@ const clearHistory = () => {
   background: #141720;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-full);
-  padding: 5px 8px 5px 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  padding: 4px 6px 4px 16px;
 }
-
 
 .chat-input {
   flex: 1;
