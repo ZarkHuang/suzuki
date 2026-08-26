@@ -1,23 +1,35 @@
 <script setup>
 import { ref } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
-import { X, Gauge, Check } from 'lucide-vue-next'
+import { X, Gauge, Check, AlertCircle } from 'lucide-vue-next'
 
 const emit = defineEmits(['close'])
 const store = useMotoStore()
 
 const currentVal = ref(store.currentOdometer)
 const newOdometer = ref(store.currentOdometer)
+const errorMsg = ref('')
 
 const quickAdd = (km) => {
   newOdometer.value = Number(newOdometer.value) + km
+  errorMsg.value = ''
 }
 
 const save = () => {
-  if (newOdometer.value && Number(newOdometer.value) >= 0) {
-    store.updateOdometer(Number(newOdometer.value))
-    emit('close')
+  const targetKm = Number(newOdometer.value)
+  if (isNaN(targetKm) || targetKm < 0) {
+    errorMsg.value = '請輸入正確的里程數字'
+    return
   }
+
+  // 防倒退檢查：機車里程錶不能小於目前紀錄里程
+  if (targetKm < store.currentOdometer) {
+    errorMsg.value = `⚠️ 累積里程不能小於目前數值 (${store.currentOdometer.toLocaleString()} km)`
+    return
+  }
+
+  store.updateOdometer(targetKm)
+  emit('close')
 }
 </script>
 
@@ -46,12 +58,21 @@ const save = () => {
               v-model="newOdometer" 
               type="number" 
               class="form-input text-highlight" 
+              :class="{ 'input-invalid': errorMsg }"
               placeholder="例如 1250" 
               autofocus
+              @input="errorMsg = ''"
             />
             <span class="unit-tag">KM</span>
           </div>
+
+          <!-- 錯誤警示卡片 -->
+          <div v-if="errorMsg" class="odo-error-banner">
+            <AlertCircle :size="15" />
+            <span>{{ errorMsg }}</span>
+          </div>
         </div>
+
 
         <!-- 快捷增減按鈕 -->
         <div class="quick-add-group">
@@ -136,7 +157,27 @@ const save = () => {
   color: var(--suzuki-blue-light);
 }
 
+.input-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25) !important;
+}
+
+.odo-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm, 6px);
+  color: #f87171;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
 .unit-tag {
+
   position: absolute;
   right: 14px;
   color: var(--text-muted);

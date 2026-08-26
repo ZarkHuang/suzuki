@@ -102,19 +102,22 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
 .brand-badge {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .suzuki-s-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   box-shadow: 0 2px 10px rgba(0, 91, 172, 0.4);
+  flex-shrink: 0;
 }
 
 .brand-logo-img {
@@ -123,22 +126,31 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
   object-fit: cover;
 }
 
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 
 .brand-name {
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   letter-spacing: 0.02em;
   color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .model-tag {
   color: var(--suzuki-blue-light);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 700;
+  white-space: nowrap;
 }
+
 
 .plate-status-row {
   display: flex;
