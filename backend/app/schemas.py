@@ -4,19 +4,20 @@ import datetime
 
 # ================= 使用者與認證 Schemas =================
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: str
     username: str
     password: str
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class GoogleAuthInput(BaseModel):
-    email: EmailStr
+    email: str
     name: str
     sub: Optional[str] = None
     picture: Optional[str] = None
+
 
 class Token(BaseModel):
 
