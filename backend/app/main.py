@@ -9,7 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from . import models, schemas, database, auth
+from .database import engine, get_db
 from sqlalchemy import text
+
 
 # 自動建立資料表與確保 users 表與 user_id 欄位存在
 try:
