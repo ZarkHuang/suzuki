@@ -9,10 +9,33 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from . import models, schemas, database, auth
-from .database import engine, get_db
+from sqlalchemy import text
 
-# 自動建立資料表 (含 users, user_id 關聯)
-models.Base.metadata.create_all(bind=engine)
+# 自動建立資料表與確保 users 表與 user_id 欄位存在
+try:
+    models.Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        # 強制在 MySQL 建立 users 資料表 (若不存在)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                email VARCHAR(100) NOT NULL UNIQUE,
+                username VARCHAR(50) NOT NULL,
+                hashed_password VARCHAR(255) NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """))
+        
+        # 確保舊表自動補上 user_id 欄位 (若尚未存在)
+        for tbl in ["vehicles", "fuel_logs", "maintenance_logs", "modifications"]:
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN user_id INT NULL;"))
+            except Exception:
+                pass # 欄位已存在
+    print("✅ MySQL 資料表與 users 表檢查/建立成功！")
+except Exception as e:
+    print(f"⚠️ 資料表初始化提示: {e}")
+
 
 app = FastAPI(
     title="SUZUKI SUI 125 雲端多租戶 API",
