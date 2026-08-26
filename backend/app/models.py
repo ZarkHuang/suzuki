@@ -46,6 +46,10 @@ class FuelLog(Base):
     price_per_liter = Column(Float, default=0.0)
     total_cost = Column(Float, nullable=False)
     is_full = Column(Integer, default=1) # 1: 加滿, 0: 未加滿
+    fuel_type = Column(String(20), default="92")
+    gas_station = Column(String(50), default="台灣中油")
+    trip_distance = Column(Float, default=0.0)
+    efficiency = Column(Float, default=0.0)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -57,12 +61,15 @@ class MaintenanceLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    item_id = Column(String(50), nullable=False) # 對應原廠項目 ID (如 oil, gear_oil)
+    item_id = Column(String(50), default="general")
+    title = Column(String(100), default="定期保養")
     date = Column(String(20), nullable=False)
     odometer = Column(Integer, nullable=False)
     cost = Column(Float, default=0.0)
-    brand = Column(String(50), nullable=True) # 使用品牌/型號
+    shop = Column(String(50), default="SUZUKI 經銷門市")
+    items = Column(Text, nullable=True) # JSON 字串或文字
     note = Column(Text, nullable=True)
+    invoice_image_url = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="maintenance_logs")
@@ -73,14 +80,18 @@ class Modification(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    category = Column(String(30), nullable=False) # 外觀精品, 懸吊制動, 動力傳動, 實用機能
+    category = Column(String(30), nullable=False) # exterior, suspension, power, utility, etc.
     title = Column(String(100), nullable=False)
     cost = Column(Float, default=0.0)
     odometer = Column(Integer, default=0)
     date = Column(String(20), nullable=False)
+    bought_from = Column(String(100), default="")
+    status = Column(String(30), default="installed")
+    rating = Column(Integer, default=5)
     note = Column(Text, nullable=True)
     image_url = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="modifications")
+
 

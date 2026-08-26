@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
 import { 
   Fuel, 
@@ -43,6 +43,12 @@ ChartJS.register(
 const store = useMotoStore()
 const showAddModal = ref(false)
 const timeRange = ref('all') // 'week' | 'month' | 'year' | 'all'
+
+// 每次進入加油紀錄畫面，自動從 MySQL 雲端刷新最新數據
+onMounted(() => {
+  store.initSyncWithBackend()
+})
+
 
 const fuelLogs = computed(() => store.fuelLogs)
 const avgEfficiency = computed(() => store.averageEfficiency)

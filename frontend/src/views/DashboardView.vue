@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMotoStore } from '../stores/motoStore'
 import { 
@@ -25,6 +25,12 @@ const store = useMotoStore()
 const showOdoModal = ref(false)
 const showFuelModal = ref(false)
 const showMaintModal = ref(false)
+
+// 每次進入儀表板首頁，自動從 MySQL 雲端刷新最新愛車數據
+onMounted(() => {
+  store.initSyncWithBackend()
+})
+
 
 const currentOdo = computed(() => store.currentOdometer)
 const avgEfficiency = computed(() => store.averageEfficiency)

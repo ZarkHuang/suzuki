@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
 import { 
   Wrench, 
@@ -22,6 +22,12 @@ const store = useMotoStore()
 const showAddModal = ref(false)
 const selectedPreset = ref(null)
 const activeTab = ref('schedule') // 'schedule' | 'history' | 'parts'
+
+// 每次進入保養畫面，自動從 MySQL 雲端刷新最新數據
+onMounted(() => {
+  store.initSyncWithBackend()
+})
+
 
 const currentOdo = computed(() => store.currentOdometer)
 const schedules = computed(() => store.schedules)

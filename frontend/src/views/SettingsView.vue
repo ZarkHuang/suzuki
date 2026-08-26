@@ -227,38 +227,9 @@ const importBackup = (e) => {
       </div>
     </div>
 
-    <!-- 雲端 API / 後端連線設定 -->
-    <div class="card settings-section">
-      <div class="section-heading">
-        <Server :size="18" class="icon-cyan" />
-        <h3>雲端 / 後端 API 同步 (FastAPI + Docker)</h3>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">後端伺服器 API 網址</label>
-        <input 
-          v-model="settings.apiUrl" 
-          type="text" 
-          class="form-input" 
-          placeholder="http://localhost:8000 或 您的免費雲端網址" 
-        />
-        <span class="field-hint">若本機有啟動 Python FastAPI 或 Docker Compose，可填入後端端點進行資料庫雙向同步。</span>
-      </div>
-
-      <div class="sync-db-action">
-        <button 
-          class="btn btn-primary btn-sm" 
-          :disabled="store.isSyncing"
-          @click="store.forceSyncToBackend()"
-        >
-          <Server :size="16" /> {{ store.isSyncing ? '同步中...' : '🔄 立即將資料同步寫入 MySQL 資料庫' }}
-        </button>
-      </div>
-    </div>
-
-
     <!-- 關於與 PWA 說明 -->
     <div class="card info-card">
+
       <div class="info-title">
         <Info :size="16" class="icon-blue" />
         <span>如何將此 PWA 安裝至手機主畫面？</span>

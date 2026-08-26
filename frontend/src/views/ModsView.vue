@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
 import { MOD_CATEGORIES } from '../constants/sui125'
 import { 
@@ -21,6 +21,12 @@ const store = useMotoStore()
 const showAddModal = ref(false)
 const selectedCategory = ref('all')
 const previewImage = ref('')
+
+// 每次進入改裝畫面，自動從 MySQL 雲端刷新最新改裝清單
+onMounted(() => {
+  store.initSyncWithBackend()
+})
+
 
 const modifications = computed(() => store.modifications)
 const totalModCost = computed(() => store.totalExpenses.modifications)

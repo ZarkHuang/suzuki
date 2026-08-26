@@ -418,8 +418,9 @@ const clearHistory = () => {
   flex-direction: column;
   gap: 12px;
   padding-right: 4px;
-  margin-bottom: 60px;
+  margin-bottom: 90px;
 }
+
 
 .message-row {
   display: flex;
@@ -559,17 +560,19 @@ const clearHistory = () => {
 }
 
 
-/* 輸入框 */
+/* 輸入框 (穩穩浮在 BottomBar 上方，支援 iOS safe-area) */
 .input-bar-fixed {
   position: fixed;
-  bottom: 64px;
+  bottom: calc(64px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   z-index: 95;
   background: rgba(10, 12, 16, 0.95);
   padding: 8px 16px;
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
+
 
 .input-inner {
   max-width: 540px;
