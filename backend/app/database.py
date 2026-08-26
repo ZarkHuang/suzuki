@@ -9,16 +9,22 @@ if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL, connect_args={"check_same_thread": False}
     )
-elif "tidbcloud.com" in DATABASE_URL or "ssl" in DATABASE_URL.lower():
-    # TiDB Cloud 雲端 MySQL 需啟用 SSL 憑證驗證
+elif "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL:
+    # 本機 MySQL
+    engine = create_engine(DATABASE_URL, pool_recycle=3600, pool_pre_ping=True)
+else:
+    # 所有雲端 MySQL (TiDB Cloud / Aiven / PlanetScale 等) 強制啟用 SSL 安全傳輸
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"ssl": {}},
+        connect_args={
+            "ssl": {
+                "check_hostname": False
+            }
+        },
         pool_recycle=300,
         pool_pre_ping=True
     )
-else:
-    engine = create_engine(DATABASE_URL, pool_recycle=3600, pool_pre_ping=True)
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
