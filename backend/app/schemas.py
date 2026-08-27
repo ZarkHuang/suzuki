@@ -38,6 +38,7 @@ class VehicleBase(BaseModel):
     current_odo: Optional[int] = 0
     license_plate: Optional[str] = "MY-SUI125"
     plate_number: Optional[str] = "MY-SUI125"
+    is_initialized: Optional[int] = 0
     note: Optional[str] = None
 
 class VehicleUpdate(VehicleBase):

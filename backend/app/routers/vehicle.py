@@ -47,6 +47,7 @@ def get_vehicle(
             "current_odo": 0,
             "tank_capacity": 5.5,
             "fuel_type": "92",
+            "is_initialized": 0,
             "note": None
         }
 
@@ -71,7 +72,8 @@ def update_vehicle(
                 license_plate="MY-SUI125",
                 current_odo=0,
                 tank_capacity=5.5,
-                fuel_type="92"
+                fuel_type="92",
+                is_initialized=1
             )
             db.add(vehicle)
 
@@ -82,6 +84,9 @@ def update_vehicle(
             update_data["plate_number"] = update_data["license_plate"]
         elif "plate_number" in update_data and "license_plate" not in update_data:
             update_data["license_plate"] = update_data["plate_number"]
+
+        # 只要更新過車輛設定，即視為完成初始化
+        update_data["is_initialized"] = 1
 
         for field, value in update_data.items():
             if hasattr(vehicle, field) and value is not None:

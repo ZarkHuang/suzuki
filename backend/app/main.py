@@ -112,6 +112,7 @@ def run_migrations():
             ("vehicles", "user_id", "INT NULL"),
             ("vehicles", "plate_number", "VARCHAR(20) DEFAULT 'MY-SUI125'"),
             ("vehicles", "license_plate", "VARCHAR(20) DEFAULT 'MY-SUI125'"),
+            ("vehicles", "is_initialized", "INT DEFAULT 0"),
             ("vehicles", "brand", "VARCHAR(50) DEFAULT 'SUZUKI'"),
             ("vehicles", "model", "VARCHAR(50) DEFAULT 'SUI 125'"),
             ("vehicles", "current_odo", "INT DEFAULT 0"),

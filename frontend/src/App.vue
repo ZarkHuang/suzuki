@@ -4,6 +4,7 @@ import Header from './components/Header.vue'
 import NavBar from './components/NavBar.vue'
 import AuthGate from './components/AuthGate.vue'
 import AuthModal from './components/AuthModal.vue'
+import VehicleOnboardingModal from './components/VehicleOnboardingModal.vue'
 import { useMotoStore } from './stores/motoStore'
 
 const store = useMotoStore()
@@ -40,6 +41,9 @@ onMounted(() => {
       <!-- 底部導航列 -->
       <NavBar />
     </template>
+
+    <!-- 首次登入 / 尚未設定愛車：強制彈出愛車基本資訊設定精靈 (不可跳過) -->
+    <VehicleOnboardingModal v-if="store.isAuthenticated && store.needsVehicleSetup" />
 
     <!-- SaaS 登入彈窗 (備用) -->
     <AuthModal v-if="store.isAuthModalOpen" />

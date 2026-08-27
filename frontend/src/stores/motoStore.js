@@ -156,13 +156,16 @@ export const useMotoStore = defineStore('moto', {
     },
 
     isAuthenticated: (state) => !!state.authToken && !!state.currentUser,
+    needsVehicleSetup: (state) => {
+      if (!state.authToken || !state.currentUser) return false
+      return state.vehicle?.isInitialized === false || !state.vehicle?.isInitialized
+    },
   },
-
 
   actions: {
     // 重置為乾淨空白狀態
     resetToCleanState() {
-      this.vehicle = { ...VEHICLE_DEFAULTS, currentOdo: 0 }
+      this.vehicle = { ...VEHICLE_DEFAULTS, currentOdo: 0, isInitialized: false }
       this.fuelLogs = []
       this.maintenanceLogs = []
       this.modifications = []

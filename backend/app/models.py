@@ -32,6 +32,7 @@ class Vehicle(Base):
     current_odo = Column(Integer, default=0)
     tank_capacity = Column(Float, default=5.5)
     fuel_type = Column(String(20), default="92 無鉛汽油")
+    is_initialized = Column(Integer, default=0)
     note = Column(Text, nullable=True)
 
     owner = relationship("User", back_populates="vehicles")

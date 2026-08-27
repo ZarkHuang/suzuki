@@ -1,18 +1,17 @@
-// SUZUKI SUI 125 官方原廠規格與保養手冊規範常數
-
 export const VEHICLE_DEFAULTS = {
   id: 'sui-125-default',
   name: 'Suzuki SUI 125',
-  brand: 'SUZUKI (台鈴機車)',
-  model: 'SUI 125 (UG125)',
+  brand: 'SUZUKI',
+  model: 'SUI 125',
   tankCapacity: 5.5, // 油箱容量 5.5L
   fuelType: '92', // 原廠建議 92 無鉛汽油以上
   oilCapacity: 650, // 機油更換量 650cc (分解 700cc)
   gearOilCapacity: 50, // 齒輪油量 50cc
   currentOdo: 0, // 預設新車初始里程 (km)
+  isInitialized: false, // 是否已完成首次自訂車況引導
   purchaseDate: new Date().toISOString().split('T')[0],
   licensePlate: 'MY-SUI125',
-  note: '日常通勤日式極簡小鴨'
+  note: '日常通勤好夥伴'
 }
 
 // 官方標準保養里程排程與項目

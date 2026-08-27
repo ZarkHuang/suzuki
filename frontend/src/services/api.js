@@ -174,6 +174,7 @@ export const api = {
       fuelType: data.fuel_type,
       currentOdo: data.current_odo,
       licensePlate: data.plate_number || data.license_plate || 'MY-SUI125',
+      isInitialized: data.is_initialized === 1 || data.is_initialized === true,
       note: data.note || ''
     }
   },
@@ -188,6 +189,7 @@ export const api = {
       current_odo: Number(data.currentOdo || 0),
       plate_number: data.licensePlate || data.plateNumber || 'MY-SUI125',
       license_plate: data.licensePlate || data.plateNumber || 'MY-SUI125',
+      is_initialized: 1,
       note: data.note || ''
     }
     const res = await apiClient.post('/api/vehicle', payload)
