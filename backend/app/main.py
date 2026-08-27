@@ -142,6 +142,7 @@ def run_migrations():
             ("modification_logs", "image_url", "VARCHAR(255) NULL"),
         ]
 
+        # 2. 補齊所有缺少的欄位
         for tbl, col, col_type in columns_to_ensure:
             try:
                 cursor.execute(f"ALTER TABLE `{tbl}` ADD COLUMN `{col}` {col_type};")
@@ -151,6 +152,17 @@ def run_migrations():
             except Exception as e:
                 # 欄位已存在 (MySQL error 1060 / Duplicate column)
                 results.append(f"Column exists {tbl}.{col}: {e}")
+
+        # 3. 確保所有資料表的主鍵 id 均具備 AUTO_INCREMENT
+        auto_inc_tables = ["users", "vehicles", "fuel_logs", "maintenance_logs", "modification_logs"]
+        for tbl in auto_inc_tables:
+            try:
+                cursor.execute(f"ALTER TABLE `{tbl}` MODIFY COLUMN `id` INT AUTO_INCREMENT;")
+                raw_conn.commit()
+                print(f"🔑 主鍵 AUTO_INCREMENT 成功: {tbl}.id")
+                results.append(f"Auto-increment enabled on {tbl}.id")
+            except Exception as e:
+                results.append(f"Auto-increment on {tbl}.id: {e}")
 
         cursor.close()
         raw_conn.close()
