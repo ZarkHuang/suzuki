@@ -28,7 +28,10 @@ def create_fuel_log(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
+    from sqlalchemy import func
+    max_id = db.query(func.max(models.FuelLog.id)).scalar() or 0
     db_log = models.FuelLog(
+        id=int(max_id) + 1,
         user_id=user.id,
         date=log_in.date,
         odometer=log_in.odometer,

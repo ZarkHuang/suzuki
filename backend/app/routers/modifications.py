@@ -32,7 +32,10 @@ def create_modification(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
+    from sqlalchemy import func
+    max_id = db.query(func.max(models.Modification.id)).scalar() or 0
     db_mod = models.Modification(
+        id=int(max_id) + 1,
         user_id=user.id,
         date=mod_in.date,
         odometer=mod_in.odometer,

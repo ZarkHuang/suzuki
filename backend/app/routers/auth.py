@@ -25,7 +25,10 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
 
     # 建立該車主專屬的預設車輛設定 (加入容錯保護，保證註冊 100% 成功回傳)
     try:
+        from sqlalchemy import func
+        max_vid = db.query(func.max(models.Vehicle.id)).scalar() or 0
         init_vehicle = models.Vehicle(
+            id=int(max_vid) + 1,
             user_id=new_user.id,
             name="SUZUKI SUI 125",
             brand="SUZUKI",

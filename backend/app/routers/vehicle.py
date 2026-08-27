@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 
 from .. import models, schemas, auth
@@ -15,7 +16,9 @@ def get_vehicle(
     try:
         vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
         if not vehicle:
+            max_id = db.query(func.max(models.Vehicle.id)).scalar() or 0
             vehicle = models.Vehicle(
+                id=int(max_id) + 1,
                 user_id=user.id,
                 name="SUZUKI SUI 125",
                 brand="SUZUKI",
@@ -35,7 +38,7 @@ def get_vehicle(
         print(f"⚠️ get_vehicle fallback: {e}")
         # 安全預設回傳，確保儀表主頁永不白屏崩潰
         return {
-            "id": "1",
+            "id": 1,
             "name": "SUZUKI SUI 125",
             "brand": "SUZUKI",
             "model": "SUI 125",
@@ -57,7 +60,9 @@ def update_vehicle(
     try:
         vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
         if not vehicle:
+            max_id = db.query(func.max(models.Vehicle.id)).scalar() or 0
             vehicle = models.Vehicle(
+                id=int(max_id) + 1,
                 user_id=user.id,
                 name="SUZUKI SUI 125",
                 brand="SUZUKI",
@@ -99,7 +104,9 @@ def update_odometer(
     try:
         vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
         if not vehicle:
+            max_id = db.query(func.max(models.Vehicle.id)).scalar() or 0
             vehicle = models.Vehicle(
+                id=int(max_id) + 1,
                 user_id=user.id,
                 name="SUZUKI SUI 125",
                 plate_number="MY-SUI125",

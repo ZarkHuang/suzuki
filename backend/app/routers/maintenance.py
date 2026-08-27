@@ -29,9 +29,12 @@ def create_maintenance_log(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
+    from sqlalchemy import func
+    max_id = db.query(func.max(models.MaintenanceLog.id)).scalar() or 0
     # 將 items list 轉為字串儲存
     items_str = json.dumps(log_in.items, ensure_ascii=False) if isinstance(log_in.items, list) else str(log_in.items or "")
     db_log = models.MaintenanceLog(
+        id=int(max_id) + 1,
         user_id=user.id,
         date=log_in.date,
         odometer=log_in.odometer,
