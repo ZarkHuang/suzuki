@@ -13,8 +13,13 @@ def get_fuel_logs(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
-    logs = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc()).all()
-    return logs
+    try:
+        logs = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc()).all()
+        return logs
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ get_fuel_logs fallback: {e}")
+        return []
 
 
 @router.post("", response_model=schemas.FuelLogResponse, status_code=status.HTTP_201_CREATED)

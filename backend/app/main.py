@@ -107,12 +107,14 @@ def init_db_schema():
         ("users", "hashed_password", "VARCHAR(255) NOT NULL"),
         ("vehicles", "user_id", "INT NULL"),
         ("vehicles", "plate_number", "VARCHAR(20) DEFAULT 'MY-SUI125'"),
+        ("vehicles", "license_plate", "VARCHAR(20) DEFAULT 'MY-SUI125'"),
+        ("vehicles", "brand", "VARCHAR(50) DEFAULT 'SUZUKI'"),
+        ("vehicles", "model", "VARCHAR(50) DEFAULT 'SUI 125'"),
         ("vehicles", "current_odo", "INT DEFAULT 0"),
         ("vehicles", "tank_capacity", "FLOAT DEFAULT 5.5"),
         ("vehicles", "fuel_type", "VARCHAR(20) DEFAULT '92'"),
         ("vehicles", "updated_at", "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
         ("fuel_logs", "user_id", "INT NULL"),
-
         ("fuel_logs", "price_per_liter", "FLOAT DEFAULT 30.2"),
         ("fuel_logs", "fuel_type", "VARCHAR(20) DEFAULT '92'"),
         ("fuel_logs", "gas_station", "VARCHAR(50) DEFAULT '台灣中油'"),
@@ -134,10 +136,9 @@ def init_db_schema():
 
     for tbl, col, col_type in columns_to_ensure:
         try:
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE `{tbl}` ADD COLUMN `{col}` {col_type};"))
-                conn.commit()
-                print(f"🔧 補齊欄位: {tbl}.{col}")
+                print(f"🔧 補齊欄位成功: {tbl}.{col}")
         except Exception:
             pass # 欄位已存在，安全略過
 
@@ -150,9 +151,8 @@ def init_db_schema():
     ]
     for c_sql in clean_sqls:
         try:
-            with engine.connect() as conn:
+            with engine.begin() as conn:
                 conn.execute(text(c_sql))
-                conn.commit()
         except Exception:
             pass
 

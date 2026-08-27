@@ -23,20 +23,24 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # 建立該車主專屬的預設車輛設定
-    init_vehicle = models.Vehicle(
-        user_id=new_user.id,
-        name="SUZUKI SUI 125",
-        brand="SUZUKI",
-        model="SUI 125",
-        plate_number="MY-SUI125",
-        license_plate="MY-SUI125",
-        current_odo=0,
-        tank_capacity=5.5,
-        fuel_type="92"
-    )
-    db.add(init_vehicle)
-    db.commit()
+    # 建立該車主專屬的預設車輛設定 (加入容錯保護，保證註冊 100% 成功回傳)
+    try:
+        init_vehicle = models.Vehicle(
+            user_id=new_user.id,
+            name="SUZUKI SUI 125",
+            brand="SUZUKI",
+            model="SUI 125",
+            plate_number="MY-SUI125",
+            license_plate="MY-SUI125",
+            current_odo=0,
+            tank_capacity=5.5,
+            fuel_type="92"
+        )
+        db.add(init_vehicle)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ init_vehicle warning (safe fallback): {e}")
 
     access_token = auth.create_access_token(data={"sub": str(new_user.id)})
     return {

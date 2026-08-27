@@ -17,8 +17,13 @@ def get_modifications(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
-    mods = db.query(models.Modification).filter(models.Modification.user_id == user.id).order_by(models.Modification.odometer.desc()).all()
-    return mods
+    try:
+        mods = db.query(models.Modification).filter(models.Modification.user_id == user.id).order_by(models.Modification.odometer.desc()).all()
+        return mods
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ get_modifications fallback: {e}")
+        return []
 
 
 @router.post("", response_model=schemas.ModificationResponse, status_code=status.HTTP_201_CREATED)

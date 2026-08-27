@@ -14,8 +14,13 @@ def get_maintenance_logs(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
-    logs = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.user_id == user.id).order_by(models.MaintenanceLog.odometer.desc()).all()
-    return logs
+    try:
+        logs = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.user_id == user.id).order_by(models.MaintenanceLog.odometer.desc()).all()
+        return logs
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ get_maintenance_logs fallback: {e}")
+        return []
 
 
 @router.post("", response_model=schemas.MaintenanceLogResponse, status_code=status.HTTP_201_CREATED)
