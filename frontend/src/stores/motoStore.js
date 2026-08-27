@@ -397,9 +397,10 @@ export const useMotoStore = defineStore('moto', {
       }
       this.persist()
 
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           await api.updateVehicle(this.vehicle)
+          this.isBackendOnline = true
           console.log('✅ 車輛設定已成功更新至 MySQL！')
         } catch (e) {
           console.error('更新車輛至 MySQL 失敗:', e)
@@ -412,13 +413,13 @@ export const useMotoStore = defineStore('moto', {
       if (newOdo !== undefined && newOdo !== null) {
         this.vehicle.currentOdo = Number(newOdo)
         this.persist()
-        if (this.isBackendOnline) {
-          api.updateVehicle(this.vehicle).catch(() => {})
+        if (this.isAuthenticated) {
+          api.updateVehicle(this.vehicle).then(() => {
+            this.isBackendOnline = true
+          }).catch(() => {})
         }
       }
     },
-
-
 
     // 新增加油紀錄 (雙寫 LocalStorage + MySQL)
     async addFuelLog(log) {
@@ -461,11 +462,12 @@ export const useMotoStore = defineStore('moto', {
       this.persist()
 
       // 同步發送至後端寫入 MySQL 並綁定 MySQL 自動產生的 id
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           const res = await api.createFuelLog(newLog)
           if (res && res.id) {
             newLog.id = res.id
+            this.isBackendOnline = true
             this.persist()
           }
         } catch (e) {
@@ -479,9 +481,10 @@ export const useMotoStore = defineStore('moto', {
     async deleteFuelLog(id) {
       this.fuelLogs = this.fuelLogs.filter(l => l.id !== id)
       this.persist()
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           await api.deleteFuelLog(id)
+          this.isBackendOnline = true
         } catch (e) {
           console.error('Delete fuel from MySQL error:', e)
         }
@@ -509,11 +512,12 @@ export const useMotoStore = defineStore('moto', {
       this.persist()
 
       // 同步發送至後端寫入 MySQL 並綁定真實 id
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           const res = await api.createMaintenanceLog(newLog)
           if (res && res.id) {
             newLog.id = res.id
+            this.isBackendOnline = true
             this.persist()
           }
         } catch (e) {
@@ -527,9 +531,10 @@ export const useMotoStore = defineStore('moto', {
     async deleteMaintenanceLog(id) {
       this.maintenanceLogs = this.maintenanceLogs.filter(l => l.id !== id)
       this.persist()
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           await api.deleteMaintenanceLog(id)
+          this.isBackendOnline = true
         } catch (e) {
           console.error('Delete maint from MySQL error:', e)
         }
@@ -556,11 +561,12 @@ export const useMotoStore = defineStore('moto', {
       this.persist()
 
       // 同步發送至後端寫入 MySQL 並綁定真實 id
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           const res = await api.createModification(newMod)
           if (res && res.id) {
             newMod.id = res.id
+            this.isBackendOnline = true
             this.persist()
           }
         } catch (e) {
@@ -574,9 +580,10 @@ export const useMotoStore = defineStore('moto', {
     async deleteModification(id) {
       this.modifications = this.modifications.filter(m => m.id !== id)
       this.persist()
-      if (this.isBackendOnline) {
+      if (this.isAuthenticated) {
         try {
           await api.deleteModification(id)
+          this.isBackendOnline = true
         } catch (e) {
           console.error('Delete mod from MySQL error:', e)
         }

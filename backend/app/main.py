@@ -142,21 +142,7 @@ def init_db_schema():
         except Exception:
             pass # 欄位已存在，安全略過
 
-    # 3. 清理過渡期未綁定帳號的舊測試資料 (保障 SaaS 多租戶純淨隔離)
-    clean_sqls = [
-        "DELETE FROM fuel_logs WHERE user_id IS NULL;",
-        "DELETE FROM maintenance_logs WHERE user_id IS NULL;",
-        "DELETE FROM modification_logs WHERE user_id IS NULL;",
-        "DELETE FROM vehicles WHERE user_id IS NULL;"
-    ]
-    for c_sql in clean_sqls:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(c_sql))
-        except Exception:
-            pass
-
-    print("✅ MySQL 資料庫結構檢查與 SaaS 租戶資料淨化成功！")
+    print("✅ MySQL 資料庫結構檢查與 SaaS 租戶資料初始化成功！")
 
 init_db_schema()
 
