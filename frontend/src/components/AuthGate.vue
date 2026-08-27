@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMotoStore } from '../stores/motoStore'
 import { 
   Lock, 
@@ -11,6 +12,7 @@ import {
   Smartphone
 } from 'lucide-vue-next'
 
+const router = useRouter()
 const store = useMotoStore()
 
 const activeTab = ref('login') // 'login' | 'register'
@@ -33,7 +35,9 @@ const handleLogin = async () => {
   isLoading.value = true
   try {
     const res = await store.login(email.value.trim(), password.value)
-    if (!res.success) {
+    if (res.success) {
+      router.push('/')
+    } else {
       errorMsg.value = res.error || '帳號或密碼錯誤，若尚未註冊請先點選「註冊帳號」'
     }
   } finally {
@@ -59,7 +63,9 @@ const handleRegister = async () => {
   try {
     const nick = username.value.trim() || email.value.split('@')[0]
     const res = await store.register(nick, email.value.trim(), password.value)
-    if (!res.success) {
+    if (res.success) {
+      router.push('/')
+    } else {
       errorMsg.value = res.error || '註冊失敗，該 Email 可能已被註冊'
     }
   } finally {

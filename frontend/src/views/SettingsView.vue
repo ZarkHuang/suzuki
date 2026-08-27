@@ -27,56 +27,6 @@ const settings = ref({ ...store.settings })
 const saveSuccess = ref(false)
 const isTesting = ref(false)
 
-const currentApiUrl = computed(() => getBaseUrl())
-const currentEnv = computed(() => {
-  return currentApiUrl.value.includes('localhost') || currentApiUrl.value.includes('127.0.0.1') ? 'local' : 'cloud'
-})
-
-const setApiEnv = (env) => {
-  if (env === 'local') {
-    settings.value.apiUrl = 'http://localhost:8000'
-  } else {
-    settings.value.apiUrl = 'https://suzuki-n9ey.onrender.com'
-  }
-  store.settings = { ...store.settings, apiUrl: settings.value.apiUrl }
-  store.persist()
-  testAndSync()
-}
-
-const testAndSync = async () => {
-  isTesting.value = true
-  try {
-    await store.initSyncWithBackend()
-    if (store.isBackendOnline) {
-      alert(`🎉 連線成功！已成功自 ${currentEnv.value === 'local' ? '本機 Docker (phpMyAdmin)' : '雲端 Render'} 同步最新資料！`)
-    } else {
-      alert(`⚠️ 連線失敗，請確認 ${currentApiUrl.value} 服務是否已啟動。`)
-    }
-  } finally {
-    isTesting.value = false
-  }
-}
-
-
-// 請求瀏覽器通知權限
-const requestNotificationPermission = async () => {
-  if (!('Notification' in window)) {
-    alert('您的瀏覽器不支援通知功能')
-    return
-  }
-  const perm = await Notification.requestPermission()
-  if (perm === 'granted') {
-    new Notification('SUZUKI SUI 125 機車管家', {
-      body: '保養提醒推播通知已成功開啟！',
-      icon: '/icon.svg'
-    })
-    settings.value.enableNotifications = true
-  } else {
-    alert('未取得通知權限')
-  }
-}
-
-// 儲存設定 (同時寫入 LocalStorage 與發送 API 至 MySQL)
 const saveSettings = async () => {
   store.vehicle = { ...store.vehicle, ...vehicle.value }
   store.settings = { ...store.settings, ...settings.value }
@@ -238,54 +188,7 @@ const importBackup = (e) => {
       </div>
     </div>
 
-    <!-- 資料庫伺服器連線切換 (雲端 Render vs 本機 Docker) -->
-    <div class="card settings-section">
-      <div class="section-heading">
-        <Server :size="18" class="icon-cyan" />
-        <h3>資料庫連線環境設定</h3>
-      </div>
-      <p class="section-desc">
-        選擇您的資料庫儲存目標。若您在本地啟動了 Docker Compose (phpMyAdmin 位於 localhost:8080)，請切換至「本機 Docker」。
-      </p>
 
-      <div class="env-toggle-group">
-        <button 
-          type="button"
-          class="btn-env-opt" 
-          :class="{ active: currentEnv === 'cloud' }"
-          @click="setApiEnv('cloud')"
-        >
-          ☁️ 雲端伺服器 (Render)
-        </button>
-        <button 
-          type="button"
-          class="btn-env-opt" 
-          :class="{ active: currentEnv === 'local' }"
-          @click="setApiEnv('local')"
-        >
-          💻 本機 Docker (phpMyAdmin)
-        </button>
-      </div>
-
-      <div class="current-api-status">
-        <div class="status-indicator-row">
-          <span class="status-dot" :class="store.isBackendOnline ? 'dot-online' : 'dot-offline'"></span>
-          <span class="status-text">
-            {{ store.isBackendOnline ? '資料庫連線正常 (即時同步中)' : '尚未連線 / 離線模式' }}
-          </span>
-        </div>
-        <div class="api-endpoint-text">目標 API: {{ currentApiUrl }}</div>
-      </div>
-
-      <div class="sync-actions-row">
-        <button class="btn btn-secondary btn-sm flex-1" @click="testAndSync">
-          <RefreshCw :size="14" :class="{ 'spin-animation': isTesting }" /> 測試連線並從資料庫重新整理
-        </button>
-        <button class="btn btn-primary btn-sm flex-1" @click="store.forceSyncToBackend()">
-          <Upload :size="14" /> 將本機資料推入該資料庫
-        </button>
-      </div>
-    </div>
 
     <!-- 資料備份與還原 -->
     <div class="card settings-section">

@@ -312,24 +312,22 @@ export const useMotoStore = defineStore('moto', {
         const online = await api.checkHealth()
         this.isBackendOnline = online
 
-        if (online) {
-          if (this.isAuthenticated) {
-            const [v, fuels, maints, mods] = await Promise.all([
-              api.getVehicle().catch(() => null),
-              api.getFuelLogs().catch(() => []),
-              api.getMaintenanceLogs().catch(() => []),
-              api.getModifications().catch(() => [])
-            ])
+        if (online && this.isAuthenticated) {
+          const [v, fuels, maints, mods] = await Promise.all([
+            api.getVehicle().catch(() => null),
+            api.getFuelLogs().catch(() => null),
+            api.getMaintenanceLogs().catch(() => null),
+            api.getModifications().catch(() => null)
+          ])
 
-            if (v) this.vehicle = { ...this.vehicle, ...v }
-            this.fuelLogs = Array.isArray(fuels) ? fuels : []
-            this.maintenanceLogs = Array.isArray(maints) ? maints : []
-            this.modifications = Array.isArray(mods) ? mods : []
-            console.log(`✅ 已從 MySQL 完成初始化同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
-          } else {
-            // 未登入訪客模式保持純淨空狀態
-            this.resetToCleanState()
-          }
+          if (v) this.vehicle = { ...this.vehicle, ...v }
+          if (Array.isArray(fuels)) this.fuelLogs = fuels
+          if (Array.isArray(maints)) this.maintenanceLogs = maints
+          if (Array.isArray(mods)) this.modifications = mods
+          console.log(`✅ 已完成雲端同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
+        } else if (!this.isAuthenticated) {
+          // 未登入訪客模式保持純淨空狀態
+          this.resetToCleanState()
         }
       } catch (err) {
         console.warn('後端連線異常:', err)
