@@ -10,17 +10,12 @@ router = APIRouter(prefix="/api/vehicle", tags=["Vehicle 儀表與車輛設定"]
 @router.get("", response_model=schemas.VehicleResponse)
 def get_vehicle(
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.Vehicle)
-    if user:
-        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
-    else:
-        vehicle = query.first()
-
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if not vehicle:
         vehicle = models.Vehicle(
-            user_id=user.id if user else None,
+            user_id=user.id,
             name="SUZUKI SUI 125",
             plate_number="MY-SUI125",
             current_odo=0,
@@ -37,17 +32,12 @@ def get_vehicle(
 def update_vehicle(
     vehicle_in: schemas.VehicleUpdate,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.Vehicle)
-    if user:
-        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
-    else:
-        vehicle = query.first()
-
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if not vehicle:
         vehicle = models.Vehicle(
-            user_id=user.id if user else None,
+            user_id=user.id,
             name="SUZUKI SUI 125",
             plate_number="MY-SUI125",
             current_odo=0,
@@ -57,7 +47,6 @@ def update_vehicle(
         db.add(vehicle)
 
     update_data = vehicle_in.dict(exclude_unset=True)
-    # 相容 license_plate -> plate_number
     if "license_plate" in update_data and "plate_number" not in update_data:
         update_data["plate_number"] = update_data["license_plate"]
 
@@ -73,17 +62,21 @@ def update_vehicle(
 def update_odometer(
     new_odo: int,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.Vehicle)
-    if user:
-        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
-    else:
-        vehicle = query.first()
-
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+        vehicle = models.Vehicle(
+            user_id=user.id,
+            name="SUZUKI SUI 125",
+            plate_number="MY-SUI125",
+            current_odo=new_odo,
+            tank_capacity=5.5,
+            fuel_type="92"
+        )
+        db.add(vehicle)
+    else:
+        vehicle.current_odo = new_odo
 
-    vehicle.current_odo = new_odo
     db.commit()
     return {"message": "Odometer updated successfully", "current_odo": vehicle.current_odo}

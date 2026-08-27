@@ -319,7 +319,7 @@ ${state.quests && state.quests.length > 0 ? state.quests.map(q => '  - ' + q).jo
     try {
       const systemInstruction = generateSystemPrompt(gameState);
       const aiModel = genAI.getGenerativeModel({
-        model: "gemini-3.1-flash-lite-preview",
+        model: "gemini-2.0-flash",
         systemInstruction: systemInstruction,
         safetySettings: [
           {

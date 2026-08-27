@@ -2,19 +2,30 @@ import { defineStore } from 'pinia'
 import { VEHICLE_DEFAULTS, OFFICIAL_MAINTENANCE_SCHEDULE, PARTS_LIFECYCLE_GUIDE } from '../constants/sui125'
 import { api } from '../services/api'
 
-const STORAGE_KEY = 'suzuki_sui_motolog_v1'
+const STORAGE_KEY_PREFIX = 'suzuki_sui_motolog_user_'
 const AUTH_STORAGE_KEY = 'suzuki_sui_motolog_auth'
+
+const getStorageKey = (userId) => userId ? `${STORAGE_KEY_PREFIX}${userId}` : 'suzuki_sui_motolog_guest'
 
 export const useMotoStore = defineStore('moto', {
   state: () => {
-    // 嘗試從 LocalStorage 讀取初始資料與 Auth 狀態
-    let localData = null
     let authData = null
+    let localData = null
+
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) localData = JSON.parse(saved)
+      // 清理舊版全域暫存垃圾資料 (避免污染新帳號)
+      if (localStorage.getItem('suzuki_sui_motolog_v1')) {
+        localStorage.removeItem('suzuki_sui_motolog_v1')
+      }
+
       const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
-      if (savedAuth) authData = JSON.parse(savedAuth)
+      if (savedAuth) {
+        authData = JSON.parse(savedAuth)
+        if (authData?.user?.id) {
+          const userSaved = localStorage.getItem(getStorageKey(authData.user.id))
+          if (userSaved) localData = JSON.parse(userSaved)
+        }
+      }
     } catch (e) {
       console.error('Failed to parse local state', e)
     }
@@ -28,92 +39,23 @@ export const useMotoStore = defineStore('moto', {
       authToken: authData?.token || null,
       currentUser: authData?.user || null,
 
-      // 車輛基本資訊
-      vehicle: localData?.vehicle || { ...VEHICLE_DEFAULTS },
+      // 車輛基本資訊 (預設初始乾淨值)
+      vehicle: localData?.vehicle || { ...VEHICLE_DEFAULTS, currentOdo: 0 },
 
-      
-      // 加油紀錄
-      fuelLogs: localData?.fuelLogs || [
-        {
-          id: 'fuel-sample-1',
-          date: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0],
-          odometer: 120,
-          liters: 4.8,
-          pricePerLiter: 30.5,
-          totalCost: 146,
-          fuelType: '92',
-          gasStation: '中油直營',
-          tripDistance: 120,
-          efficiency: 25.0,
-          fullTank: true,
-          note: '新車牽車第一次加滿'
-        },
-        {
-          id: 'fuel-sample-2',
-          date: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0],
-          odometer: 295,
-          liters: 3.8,
-          pricePerLiter: 30.2,
-          totalCost: 115,
-          fuelType: '92',
-          gasStation: '台塑石油',
-          tripDistance: 175,
-          efficiency: 46.05,
-          fullTank: true,
-          note: '通勤順暢，油耗表現驚艷'
-        }
-      ],
+      // 加油紀錄 (純雲端 SaaS 資料，預設為空陣列)
+      fuelLogs: localData?.fuelLogs || [],
 
-      // 保養紀錄
-      maintenanceLogs: localData?.maintenanceLogs || [
-        {
-          id: 'maint-sample-1',
-          date: new Date(Date.now() - 1 * 86400000).toISOString().split('T')[0],
-          odometer: 300,
-          title: '300 km 新車首次原廠保養 (首保)',
-          shopName: 'SUZUKI 形象旗艦店 (台鈴機車)',
-          cost: 350,
-          items: ['更換 ECSTAR 10W-40 原廠機油', '更換原廠齒輪油', '清洗機油濾網', '煞車胎壓檢查'],
-          note: '鐵屑正常，車況順暢，換油後拉轉更順',
-          receiptImage: ''
-        }
-      ],
+      // 保養紀錄 (純雲端 SaaS 資料，預設為空陣列)
+      maintenanceLogs: localData?.maintenanceLogs || [],
 
-      // 自訂與官方排程
-      schedules: localData?.schedules || [...OFFICIAL_MAINTENANCE_SCHEDULE],
+      // 自訂與官方排程規範
+      schedules: [...OFFICIAL_MAINTENANCE_SCHEDULE],
 
-      // 改裝日誌
-      modifications: localData?.modifications || [
-        {
-          id: 'mod-sample-1',
-          date: new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0],
-          odometer: 80,
-          title: 'SUI 專用日系復古後貨架 + 延伸後箱',
-          category: 'storage',
-          cost: 2200,
-          boughtFrom: '蝦皮購物 / 專門店',
-          status: 'installed',
-          rating: 5,
-          note: '直上不需修改車殼，載物量大增且造型極具昭和文青感',
-          imageUrl: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=600&auto=format&fit=crop&q=80'
-        },
-        {
-          id: 'mod-sample-2',
-          date: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0],
-          odometer: 180,
-          title: '八爪減震鋁合金手機支架 + QC3.0快充頭',
-          category: 'electronics',
-          cost: 890,
-          boughtFrom: 'MOMO購物網',
-          status: 'installed',
-          rating: 5,
-          note: '導航看地圖非常穩固，鎖後照鏡底座',
-          imageUrl: ''
-        }
-      ],
+      // 改裝日誌 (純雲端 SaaS 資料，預設為空陣列)
+      modifications: localData?.modifications || [],
 
       // AI 問診對話歷史
-      aiChatHistory: localData?.aiChatHistory || [
+      aiChatHistory: [
         {
           role: 'assistant',
           content: '哈囉！我是您的 **Suzuki SUI 125 隨車智慧診斷小幫手** 🛵。\n\n不論是車輛異音、起步抖動、煞車軟、冷車難發，或是機油耗材更換週期問題，都可以隨時問我！',
@@ -128,14 +70,13 @@ export const useMotoStore = defineStore('moto', {
         notifyAdvanceKm: 150,
         currencySymbol: 'NT$'
       }
-
     }
   },
 
   getters: {
     currentOdometer: (state) => {
       // 若車主有主動設定 currentOdo，以車主最新設定或所有紀錄的最大值為準
-      let maxOdo = Number(state.vehicle.currentOdo || 0)
+      let maxOdo = Number(state.vehicle?.currentOdo || 0)
       state.fuelLogs.forEach(l => { if (Number(l.odometer) > maxOdo) maxOdo = Number(l.odometer) })
       state.maintenanceLogs.forEach(m => { if (Number(m.odometer) > maxOdo) maxOdo = Number(m.odometer) })
       state.modifications.forEach(mod => { if (Number(mod.odometer) > maxOdo) maxOdo = Number(mod.odometer) })
@@ -163,7 +104,7 @@ export const useMotoStore = defineStore('moto', {
     },
 
     nextMaintenance: (state) => {
-      const current = state.vehicle.currentOdo || 0
+      const current = Number(state.vehicle?.currentOdo || 0)
       const sorted = [...state.schedules].sort((a, b) => a.mileage - b.mileage)
       
       for (const schedule of sorted) {
@@ -192,7 +133,7 @@ export const useMotoStore = defineStore('moto', {
     },
 
     partsStatusList: (state) => {
-      const current = state.vehicle.currentOdo || 0
+      const current = Number(state.vehicle?.currentOdo || 0)
       return PARTS_LIFECYCLE_GUIDE.map(part => {
         const lastMaint = state.maintenanceLogs
           .filter(l => l.items && l.items.some(i => (typeof i === 'string' ? i : i.name).includes(part.name.split(' ')[0])))
@@ -219,6 +160,14 @@ export const useMotoStore = defineStore('moto', {
 
 
   actions: {
+    // 重置為乾淨空白狀態
+    resetToCleanState() {
+      this.vehicle = { ...VEHICLE_DEFAULTS, currentOdo: 0 }
+      this.fuelLogs = []
+      this.maintenanceLogs = []
+      this.modifications = []
+    },
+
     // 開關登入彈窗
     openAuthModal() {
       this.isAuthModalOpen = true
@@ -235,8 +184,9 @@ export const useMotoStore = defineStore('moto', {
         this.currentUser = res.user
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
         this.closeAuthModal()
+        this.resetToCleanState()
         // 重新從雲端抓取該帳號專屬資料
-        await this.initSyncWithBackend()
+        await this.initSyncWithBackend(true)
         return { success: true }
       } catch (err) {
         return { success: false, error: err.message }
@@ -251,14 +201,14 @@ export const useMotoStore = defineStore('moto', {
         this.currentUser = res.user
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
         this.closeAuthModal()
+        this.resetToCleanState()
         // 重新從雲端抓取該帳號專屬資料
-        await this.initSyncWithBackend()
+        await this.initSyncWithBackend(true)
         return { success: true }
       } catch (err) {
         return { success: false, error: err.message }
       }
     },
-
 
     // 註冊
     async register(username, email, password) {
@@ -268,8 +218,9 @@ export const useMotoStore = defineStore('moto', {
         this.currentUser = res.user
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
         this.closeAuthModal()
+        this.resetToCleanState()
         // 重新從雲端抓取該帳號專屬資料
-        await this.initSyncWithBackend()
+        await this.initSyncWithBackend(true)
         return { success: true }
       } catch (err) {
         return { success: false, error: err.message }
@@ -278,15 +229,20 @@ export const useMotoStore = defineStore('moto', {
 
     // 登出
     logout() {
+      const oldUserId = this.currentUser?.id
       this.authToken = null
       this.currentUser = null
       localStorage.removeItem(AUTH_STORAGE_KEY)
-      // 重新拉取或重置
-      this.initSyncWithBackend()
+      if (oldUserId) {
+        localStorage.removeItem(getStorageKey(oldUserId))
+      }
+      this.resetToCleanState()
+      this.initSyncWithBackend(true)
     },
 
     // 精準獨立同步 1: 車輛與儀表設定 (/api/vehicle)
     async syncVehicle(force = false) {
+      if (!this.isAuthenticated) return
       const now = Date.now()
       if (!force && this._lastVehicleSync && now - this._lastVehicleSync < 2000) return
       this._lastVehicleSync = now
@@ -305,6 +261,7 @@ export const useMotoStore = defineStore('moto', {
 
     // 精準獨立同步 2: 加油紀錄 (/api/fuel)
     async syncFuelLogs(force = false) {
+      if (!this.isAuthenticated) return
       const now = Date.now()
       if (!force && this._lastFuelSync && now - this._lastFuelSync < 2000) return
       this._lastFuelSync = now
@@ -323,6 +280,7 @@ export const useMotoStore = defineStore('moto', {
 
     // 精準獨立同步 3: 保養紀錄 (/api/maintenance)
     async syncMaintenanceLogs(force = false) {
+      if (!this.isAuthenticated) return
       const now = Date.now()
       if (!force && this._lastMaintSync && now - this._lastMaintSync < 2000) return
       this._lastMaintSync = now
@@ -341,6 +299,7 @@ export const useMotoStore = defineStore('moto', {
 
     // 精準獨立同步 4: 改裝紀錄 (/api/modifications)
     async syncModifications(force = false) {
+      if (!this.isAuthenticated) return
       const now = Date.now()
       if (!force && this._lastModSync && now - this._lastModSync < 2000) return
       this._lastModSync = now
@@ -358,9 +317,9 @@ export const useMotoStore = defineStore('moto', {
     },
 
     // 全局一次性初始化同步
-    async initSyncWithBackend() {
+    async initSyncWithBackend(force = false) {
       const now = Date.now()
-      if (this._lastGlobalSync && now - this._lastGlobalSync < 3000) return
+      if (!force && this._lastGlobalSync && now - this._lastGlobalSync < 3000) return
       this._lastGlobalSync = now
 
       this.isSyncing = true
@@ -369,21 +328,26 @@ export const useMotoStore = defineStore('moto', {
         this.isBackendOnline = online
 
         if (online) {
-          const [v, fuels, maints, mods] = await Promise.all([
-            api.getVehicle().catch(() => null),
-            api.getFuelLogs().catch(() => []),
-            api.getMaintenanceLogs().catch(() => []),
-            api.getModifications().catch(() => [])
-          ])
+          if (this.isAuthenticated) {
+            const [v, fuels, maints, mods] = await Promise.all([
+              api.getVehicle().catch(() => null),
+              api.getFuelLogs().catch(() => []),
+              api.getMaintenanceLogs().catch(() => []),
+              api.getModifications().catch(() => [])
+            ])
 
-          if (v) this.vehicle = { ...this.vehicle, ...v }
-          if (Array.isArray(fuels)) this.fuelLogs = fuels
-          if (Array.isArray(maints)) this.maintenanceLogs = maints
-          if (Array.isArray(mods)) this.modifications = mods
-          console.log(`✅ 已從 MySQL 完成初始化同步`)
+            if (v) this.vehicle = { ...this.vehicle, ...v }
+            this.fuelLogs = Array.isArray(fuels) ? fuels : []
+            this.maintenanceLogs = Array.isArray(maints) ? maints : []
+            this.modifications = Array.isArray(mods) ? mods : []
+            console.log(`✅ 已從 MySQL 完成初始化同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
+          } else {
+            // 未登入訪客模式保持純淨空狀態
+            this.resetToCleanState()
+          }
         }
       } catch (err) {
-        console.warn('後端連線異常，將運行於離線 LocalStorage 模式:', err)
+        console.warn('後端連線異常:', err)
         this.isBackendOnline = false
       } finally {
         this.isSyncing = false
@@ -391,12 +355,18 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-
-
-
     persist() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.$state))
+        if (this.isAuthenticated && this.currentUser?.id) {
+          const key = getStorageKey(this.currentUser.id)
+          localStorage.setItem(key, JSON.stringify({
+            vehicle: this.vehicle,
+            fuelLogs: this.fuelLogs,
+            maintenanceLogs: this.maintenanceLogs,
+            modifications: this.modifications,
+            settings: this.settings
+          }))
+        }
       } catch (e) {
         console.error('Save to localStorage failed:', e)
       }

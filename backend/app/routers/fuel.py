@@ -11,13 +11,9 @@ router = APIRouter(prefix="/api/fuel", tags=["Fuel 加油與油耗紀錄"])
 @router.get("", response_model=List[schemas.FuelLogResponse])
 def get_fuel_logs(
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.FuelLog)
-    if user:
-        logs = query.filter((models.FuelLog.user_id == user.id) | (models.FuelLog.user_id.is_(None))).order_by(models.FuelLog.odometer.desc()).all()
-    else:
-        logs = query.order_by(models.FuelLog.odometer.desc()).all()
+    logs = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc()).all()
     return logs
 
 
@@ -25,10 +21,10 @@ def get_fuel_logs(
 def create_fuel_log(
     log_in: schemas.FuelLogCreate,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
     db_log = models.FuelLog(
-        user_id=user.id if user else None,
+        user_id=user.id,
         date=log_in.date,
         odometer=log_in.odometer,
         liters=log_in.liters,
@@ -43,10 +39,8 @@ def create_fuel_log(
     )
     db.add(db_log)
 
-
     # 同步更新車輛里程
-    veh_query = db.query(models.Vehicle)
-    vehicle = veh_query.filter(models.Vehicle.user_id == user.id).first() if user else veh_query.first()
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if vehicle and log_in.odometer > (vehicle.current_odo or 0):
         vehicle.current_odo = log_in.odometer
 
@@ -58,11 +52,9 @@ def create_fuel_log(
 def delete_fuel_log(
     log_id: str,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id)
-    if user:
-        query = query.filter(models.FuelLog.user_id == user.id)
+    query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id, models.FuelLog.user_id == user.id)
     log = query.first()
     if not log:
         raise HTTPException(status_code=404, detail="紀錄未找到")

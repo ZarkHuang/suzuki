@@ -1,6 +1,8 @@
 <script setup>
 import { ref, nextTick } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
+import { api } from '../services/api'
+import { GoogleGenAI } from '@google/genai'
 import { 
   Bot, 
   Send, 
@@ -14,6 +16,12 @@ const store = useMotoStore()
 const userInput = ref('')
 const isThinking = ref(false)
 const chatContainer = ref(null)
+
+// 初始化 Google 官方新版 @google/genai SDK
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBc2hgta4L0aGZQQCD4BaoFuzXpzJxBEvg"
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY })
+
+
 
 // 內建 SUI 125 與一般速克達專業機車離線知識庫
 const QUICK_ISSUES = [
@@ -101,13 +109,9 @@ const getOfflineDiagnosis = (query) => {
 3. **安全提醒：** 若有涉及引擎異常巨響、車頭龍頭劇烈晃動或煞車失靈，切勿勉強騎乘，請就近至 SUZUKI 授權經銷門市檢測！`
 }
 
-// 導入 Google 官方 Gemini SDK (比照 App.tsx 實作)
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
-
-const GEMINI_KEY = 'AIzaSyAnpi95Gzacpe-DXWSURBnhoO7WetM-0S4'
-const genAI = new GoogleGenerativeAI(GEMINI_KEY)
 
 const sendQuery = async (text) => {
+
   const q = text || userInput.value
   if (!q.trim()) return
 
@@ -127,11 +131,9 @@ const sendQuery = async (text) => {
     const recentMaints = store.maintenanceLogs.slice(0, 3).map(m => `${m.odometer}km [${m.title}] (${m.date})`).join('、') || '尚無紀錄'
     const currentMods = store.modifications.map(mod => `【${mod.category}】${mod.title}`).join('、') || '無改裝 (原廠狀態)'
     const avgEff = store.averageEfficiency > 0 ? `${store.averageEfficiency} km/L` : '尚無足夠數據'
-    
-    // 找出即期或異常的耗材
     const urgentParts = store.partsStatusList.filter(p => p.status === 'critical' || p.status === 'warning').map(p => `${p.name}(已使用${p.distanceUsed}km)`).join('、') || '目前各耗材壽命良好'
 
-    const systemPrompt = `你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish 等車款) 的資深機車技師與保養顧問。
+    const systemPrompt = `你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish 等車款) 的資深機車維修技師與保養顧問。
 請根據車主提問的車況異常、異音、保養里程或疑難雜症，給予親切、專業、條理分明的排查診斷與建議處置步驟。
 
 【車主愛車客觀數據 (請適時交叉比對診斷，若問題無關則無需贅述)】：
@@ -142,55 +144,46 @@ const sendQuery = async (text) => {
 - 目前改裝項目清單：${currentMods}
 - 耗材健康度預警：${urgentParts}`
 
-    const aiModel = genAI.getGenerativeModel({
-      model: 'gemini-3.1-flash-lite-preview',
-      systemInstruction: systemPrompt,
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        }
-      ]
-    })
-
-
-    // 組織歷史對話記憶 (Gemini 要求第一條必須為 user，且最多取最近 6 則作為滑動記憶視窗)
-    const rawHistory = store.aiChatHistory.slice(0, -1) // 排除剛才 push 進去的那則
-    const firstUserIdx = rawHistory.findIndex(m => m.role === 'user')
-    let shortTermMemory = []
-
-    if (firstUserIdx !== -1) {
-      // 永遠只取最近 6 則，避免 Token 暴衝與對話雜訊
-      const recentHistory = rawHistory.slice(firstUserIdx).slice(-6)
-      // 若截斷後的第一則剛好是 model，再往後取一則確保第一則是 user
-      const validStartIdx = recentHistory.findIndex(m => m.role === 'user')
-      if (validStartIdx !== -1) {
-        shortTermMemory = recentHistory.slice(validStartIdx).map(msg => ({
+    // 優先使用新版官方 SDK @google/genai 調用 gemini-2.5-flash
+    let responseText = ''
+    try {
+      // 組織滑動歷史對話視窗 (最多取最近 6 則)
+      const rawHistory = store.aiChatHistory.slice(0, -1).slice(-6)
+      const formattedContents = [
+        ...rawHistory.map(msg => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.content }]
-        }))
+        })),
+        {
+          role: 'user',
+          parts: [{ text: q }]
+        }
+      ]
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: formattedContents,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.7
+        }
+      })
+
+      responseText = response.text || (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) || ''
+    } catch (sdkErr) {
+      console.warn('@google/genai 2.5 調用異常，嘗試 gemini-2.0-flash / 本地知識庫:', sdkErr)
+      try {
+        const res = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: q,
+          config: { systemInstruction: systemPrompt }
+        })
+        responseText = res.text || ''
+      } catch (fErr) {
+        console.warn('啟用本地 SUI 125 專家知識庫:', fErr)
+        responseText = getOfflineDiagnosis(q)
       }
     }
-
-    const chat = aiModel.startChat({
-      history: shortTermMemory
-    })
-
-    const result = await chat.sendMessage(q)
-    const response = await result.response
-    let responseText = response.text()
 
     // 檢查目前問答輪數 (若已超過 5 則，主動詢問是否解決並引導結案)
     const userMsgCount = store.aiChatHistory.filter(m => m.role === 'user').length
@@ -200,17 +193,20 @@ const sendQuery = async (text) => {
 
     store.addAiMessage('assistant', responseText)
   } catch (err) {
-    console.error('Gemini 連線異常，啟用備援診斷庫:', err)
+    console.error('AI 健檢處理異常:', err)
     const diagnosis = getOfflineDiagnosis(q)
     store.addAiMessage('assistant', diagnosis)
   } finally {
     isThinking.value = false
+
     await nextTick()
     if (chatContainer.value) {
       chatContainer.value.scrollTop = chatContainer.value.scrollHeight
     }
   }
 }
+
+
 
 // 結案並開啟新對話
 const finishAndResetSession = () => {

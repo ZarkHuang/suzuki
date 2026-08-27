@@ -2,13 +2,16 @@
 import { onMounted } from 'vue'
 import Header from './components/Header.vue'
 import NavBar from './components/NavBar.vue'
+import AuthGate from './components/AuthGate.vue'
 import AuthModal from './components/AuthModal.vue'
 import { useMotoStore } from './stores/motoStore'
 
 const store = useMotoStore()
 
 onMounted(() => {
-  store.initSyncWithBackend()
+  if (store.isAuthenticated) {
+    store.initSyncWithBackend()
+  }
 })
 </script>
 
@@ -17,23 +20,29 @@ onMounted(() => {
     <!-- 動態背景網格與光暈效果 -->
     <div class="bg-mesh-pattern"></div>
 
-    <!-- 頂部狀態列 -->
-    <Header />
+    <!-- 未登入：強制登入/註冊閘道 (Auth Gate) -->
+    <AuthGate v-if="!store.isAuthenticated" />
 
-    <!-- 主要頁面內容 (含過渡動畫) -->
-    <main class="main-content">
-      <router-view v-slot="{ Component }">
-        <transition name="page-fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-    </main>
+    <!-- 已登入：完整數位座艙儀表與全功能操作 -->
+    <template v-else>
+      <!-- 頂部狀態列 -->
+      <Header />
 
-    <!-- 底部導航列 -->
-    <NavBar />
+      <!-- 主要頁面內容 (含過渡動畫) -->
+      <main class="main-content">
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </main>
 
-    <!-- SaaS 登入 / 註冊彈窗 -->
-    <AuthModal />
+      <!-- 底部導航列 -->
+      <NavBar />
+    </template>
+
+    <!-- SaaS 登入彈窗 (備用) -->
+    <AuthModal v-if="store.isAuthModalOpen" />
   </div>
 </template>
 

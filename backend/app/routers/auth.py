@@ -28,7 +28,7 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
         user_id=new_user.id,
         name="SUZUKI SUI 125",
         plate_number="MY-SUI125",
-        current_odo=300,
+        current_odo=0,
         tank_capacity=5.5,
         fuel_type="92"
     )
@@ -74,7 +74,7 @@ def google_auth(auth_in: schemas.GoogleAuthInput, db: Session = Depends(get_db))
             user_id=user.id,
             name="SUZUKI SUI 125",
             plate_number="MY-SUI125",
-            current_odo=300,
+            current_odo=0,
             tank_capacity=5.5,
             fuel_type="92"
         )

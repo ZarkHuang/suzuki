@@ -9,9 +9,9 @@ export const VEHICLE_DEFAULTS = {
   fuelType: '92', // 原廠建議 92 無鉛汽油以上
   oilCapacity: 650, // 機油更換量 650cc (分解 700cc)
   gearOilCapacity: 50, // 齒輪油量 50cc
-  currentOdo: 300, // 預設新車里程 (km)
+  currentOdo: 0, // 預設新車初始里程 (km)
   purchaseDate: new Date().toISOString().split('T')[0],
-  licensePlate: 'ABC-1234',
+  licensePlate: 'MY-SUI125',
   note: '日常通勤日式極簡小鴨'
 }
 

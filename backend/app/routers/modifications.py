@@ -15,13 +15,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.get("", response_model=List[schemas.ModificationResponse])
 def get_modifications(
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.Modification)
-    if user:
-        mods = query.filter((models.Modification.user_id == user.id) | (models.Modification.user_id.is_(None))).order_by(models.Modification.odometer.desc()).all()
-    else:
-        mods = query.order_by(models.Modification.odometer.desc()).all()
+    mods = db.query(models.Modification).filter(models.Modification.user_id == user.id).order_by(models.Modification.odometer.desc()).all()
     return mods
 
 
@@ -29,10 +25,10 @@ def get_modifications(
 def create_modification(
     mod_in: schemas.ModificationCreate,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
     db_mod = models.Modification(
-        user_id=user.id if user else None,
+        user_id=user.id,
         date=mod_in.date,
         odometer=mod_in.odometer,
         title=mod_in.title,
@@ -47,8 +43,7 @@ def create_modification(
     db.add(db_mod)
 
     # 同步更新車輛里程
-    veh_query = db.query(models.Vehicle)
-    vehicle = veh_query.filter(models.Vehicle.user_id == user.id).first() if user else veh_query.first()
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if vehicle and mod_in.odometer > (vehicle.current_odo or 0):
         vehicle.current_odo = mod_in.odometer
 
@@ -60,17 +55,15 @@ def create_modification(
 def delete_modification(
     mod_id: str,
     db: Session = Depends(get_db),
-    user: Optional[models.User] = Depends(auth.get_optional_current_user)
+    user: models.User = Depends(auth.get_current_user)
 ):
     # 若 mod_id 是字串/數字相容查找
     try:
         m_id = int(mod_id)
-        query = db.query(models.Modification).filter(models.Modification.id == m_id)
+        query = db.query(models.Modification).filter(models.Modification.id == m_id, models.Modification.user_id == user.id)
     except ValueError:
-        query = db.query(models.Modification).filter(models.Modification.title == mod_id)
+        query = db.query(models.Modification).filter(models.Modification.title == mod_id, models.Modification.user_id == user.id)
 
-    if user:
-        query = query.filter(models.Modification.user_id == user.id)
     mod = query.first()
     if not mod:
         raise HTTPException(status_code=404, detail="改裝紀錄未找到")
