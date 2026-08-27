@@ -23,13 +23,11 @@ def register(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
+    # 建立該車主專屬的預設車輛設定
     init_vehicle = models.Vehicle(
-        id=f"veh-{new_user.id}",
         user_id=new_user.id,
         name="SUZUKI SUI 125",
-        brand="SUZUKI",
-        model="SUI 125",
-        license_plate="MY-SUI125",
+        plate_number="MY-SUI125",
         current_odo=300,
         tank_capacity=5.5,
         fuel_type="92"
@@ -73,12 +71,9 @@ def google_auth(auth_in: schemas.GoogleAuthInput, db: Session = Depends(get_db))
         db.refresh(user)
 
         init_vehicle = models.Vehicle(
-            id=f"veh-{user.id}",
             user_id=user.id,
             name="SUZUKI SUI 125",
-            brand="SUZUKI",
-            model="SUI 125",
-            license_plate="MY-SUI125",
+            plate_number="MY-SUI125",
             current_odo=300,
             tank_capacity=5.5,
             fuel_type="92"

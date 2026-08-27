@@ -76,10 +76,11 @@ class MaintenanceLog(Base):
 
 # 改裝日誌
 class Modification(Base):
-    __tablename__ = "modifications"
+    __tablename__ = "modification_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
     category = Column(String(30), nullable=False) # exterior, suspension, power, utility, etc.
     title = Column(String(100), nullable=False)
     cost = Column(Float, default=0.0)

@@ -20,12 +20,9 @@ def get_vehicle(
 
     if not vehicle:
         vehicle = models.Vehicle(
-            id=f"veh-{user.id if user else 'default'}",
             user_id=user.id if user else None,
             name="SUZUKI SUI 125",
-            brand="SUZUKI",
-            model="SUI 125",
-            license_plate="MY-SUI125",
+            plate_number="MY-SUI125",
             current_odo=0,
             tank_capacity=5.5,
             fuel_type="92"
@@ -50,12 +47,9 @@ def update_vehicle(
 
     if not vehicle:
         vehicle = models.Vehicle(
-            id=f"veh-{user.id if user else 'default'}",
             user_id=user.id if user else None,
             name="SUZUKI SUI 125",
-            brand="SUZUKI",
-            model="SUI 125",
-            license_plate="MY-SUI125",
+            plate_number="MY-SUI125",
             current_odo=0,
             tank_capacity=5.5,
             fuel_type="92"
@@ -63,6 +57,10 @@ def update_vehicle(
         db.add(vehicle)
 
     update_data = vehicle_in.dict(exclude_unset=True)
+    # 相容 license_plate -> plate_number
+    if "license_plate" in update_data and "plate_number" not in update_data:
+        update_data["plate_number"] = update_data["license_plate"]
+
     for field, value in update_data.items():
         if hasattr(vehicle, field) and value is not None:
             setattr(vehicle, field, value)
@@ -70,7 +68,6 @@ def update_vehicle(
     db.commit()
     db.refresh(vehicle)
     return vehicle
-
 
 @router.patch("/odometer")
 def update_odometer(
@@ -80,9 +77,9 @@ def update_odometer(
 ):
     query = db.query(models.Vehicle)
     if user:
-        vehicle = query.filter(models.Vehicle.user_id == user.id).first()
+        vehicle = query.filter((models.Vehicle.user_id == user.id) | (models.Vehicle.user_id.is_(None))).first()
     else:
-        vehicle = query.filter(models.Vehicle.user_id.is_(None)).first() or query.first()
+        vehicle = query.first()
 
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehicle not found")

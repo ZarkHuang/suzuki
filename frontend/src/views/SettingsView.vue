@@ -1,7 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
-import { api } from '../services/api'
+
+import { api, getBaseUrl } from '../services/api'
 import { 
   Settings, 
   Bike, 
@@ -15,15 +16,47 @@ import {
   Smartphone,
   User,
   LogIn,
-  LogOut
+  LogOut,
+  RefreshCw
 } from 'lucide-vue-next'
-
 
 const store = useMotoStore()
 
 const vehicle = ref({ ...store.vehicle })
 const settings = ref({ ...store.settings })
 const saveSuccess = ref(false)
+const isTesting = ref(false)
+
+const currentApiUrl = computed(() => getBaseUrl())
+const currentEnv = computed(() => {
+  return currentApiUrl.value.includes('localhost') || currentApiUrl.value.includes('127.0.0.1') ? 'local' : 'cloud'
+})
+
+const setApiEnv = (env) => {
+  if (env === 'local') {
+    settings.value.apiUrl = 'http://localhost:8000'
+  } else {
+    settings.value.apiUrl = 'https://suzuki-n9ey.onrender.com'
+  }
+  store.settings = { ...store.settings, apiUrl: settings.value.apiUrl }
+  store.persist()
+  testAndSync()
+}
+
+const testAndSync = async () => {
+  isTesting.value = true
+  try {
+    await store.initSyncWithBackend()
+    if (store.isBackendOnline) {
+      alert(`🎉 連線成功！已成功自 ${currentEnv.value === 'local' ? '本機 Docker (phpMyAdmin)' : '雲端 Render'} 同步最新資料！`)
+    } else {
+      alert(`⚠️ 連線失敗，請確認 ${currentApiUrl.value} 服務是否已啟動。`)
+    }
+  } finally {
+    isTesting.value = false
+  }
+}
+
 
 // 請求瀏覽器通知權限
 const requestNotificationPermission = async () => {
@@ -205,8 +238,58 @@ const importBackup = (e) => {
       </div>
     </div>
 
+    <!-- 資料庫伺服器連線切換 (雲端 Render vs 本機 Docker) -->
+    <div class="card settings-section">
+      <div class="section-heading">
+        <Server :size="18" class="icon-cyan" />
+        <h3>資料庫連線環境設定</h3>
+      </div>
+      <p class="section-desc">
+        選擇您的資料庫儲存目標。若您在本地啟動了 Docker Compose (phpMyAdmin 位於 localhost:8080)，請切換至「本機 Docker」。
+      </p>
+
+      <div class="env-toggle-group">
+        <button 
+          type="button"
+          class="btn-env-opt" 
+          :class="{ active: currentEnv === 'cloud' }"
+          @click="setApiEnv('cloud')"
+        >
+          ☁️ 雲端伺服器 (Render)
+        </button>
+        <button 
+          type="button"
+          class="btn-env-opt" 
+          :class="{ active: currentEnv === 'local' }"
+          @click="setApiEnv('local')"
+        >
+          💻 本機 Docker (phpMyAdmin)
+        </button>
+      </div>
+
+      <div class="current-api-status">
+        <div class="status-indicator-row">
+          <span class="status-dot" :class="store.isBackendOnline ? 'dot-online' : 'dot-offline'"></span>
+          <span class="status-text">
+            {{ store.isBackendOnline ? '資料庫連線正常 (即時同步中)' : '尚未連線 / 離線模式' }}
+          </span>
+        </div>
+        <div class="api-endpoint-text">目標 API: {{ currentApiUrl }}</div>
+      </div>
+
+      <div class="sync-actions-row">
+        <button class="btn btn-secondary btn-sm flex-1" @click="testAndSync">
+          <RefreshCw :size="14" :class="{ 'spin-animation': isTesting }" /> 測試連線並從資料庫重新整理
+        </button>
+        <button class="btn btn-primary btn-sm flex-1" @click="store.forceSyncToBackend()">
+          <Upload :size="14" /> 將本機資料推入該資料庫
+        </button>
+      </div>
+    </div>
+
     <!-- 資料備份與還原 -->
     <div class="card settings-section">
+
       <div class="section-heading">
         <Smartphone :size="18" class="icon-amber" />
         <h3>資料備份與還原 (0元離線存儲)</h3>
@@ -459,5 +542,93 @@ const importBackup = (e) => {
   color: var(--text-secondary);
   line-height: 1.4;
 }
+
+/* 環境切換器樣式 */
+.env-toggle-group {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.btn-env-opt {
+  flex: 1;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-env-opt:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.btn-env-opt.active {
+  background: rgba(0, 91, 172, 0.2);
+  border-color: var(--color-primary);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(0, 91, 172, 0.3);
+}
+
+.current-api-status {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot-online {
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+}
+
+.dot-offline {
+  background: #f87171;
+  box-shadow: 0 0 8px #f87171;
+}
+
+.api-endpoint-text {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: monospace;
+  margin-top: 4px;
+}
+
+.sync-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>
+
 

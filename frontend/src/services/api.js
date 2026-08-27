@@ -1,48 +1,70 @@
-const CLOUD_API_URL = 'https://suzuki-n9ey.onrender.com'
+import axios from 'axios'
 
-const getBaseUrl = () => {
+// 1. 取得後端 Domain 前綴 (開發環境使用 '' 走 Vite Proxy；生產環境使用 https://suzuki-n9ey.onrender.com)
+export const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
-    // 優先讀取使用者在設定頁自訂的網址 (若有)
+    // 檢查使用者在設定頁是否自訂了網址
     try {
       const saved = localStorage.getItem('suzuki_sui_motolog_v1')
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed.settings && parsed.settings.apiUrl && parsed.settings.apiUrl !== 'http://localhost:8000') {
-          return parsed.settings.apiUrl.replace(/\/$/, '')
+        if (parsed.settings && parsed.settings.apiUrl) {
+          // 清理末尾斜線與多餘的 /api (由端點統一帶 /api)
+          return parsed.settings.apiUrl.replace(/\/$/, '').replace(/\/api$/, '')
         }
       }
     } catch (e) {}
 
-    // 本地 Vite 開發且本機沒特別指定時
-    if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-      return CLOUD_API_URL
+    // 本地 Vite 開發環境 (localhost / 127.0.0.1) -> 回傳空字串走 Vite Proxy 反向代理
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return ''
     }
   }
-  return CLOUD_API_URL
+
+  // 生產環境 (Vercel)
+  const envUrl = import.meta.env.VITE_API_BASE_URL || 'https://suzuki-n9ey.onrender.com'
+  return envUrl.replace(/\/$/, '').replace(/\/api$/, '')
 }
 
-const API_BASE = getBaseUrl()
+// 2. 建立標準 Axios 實例
+export const apiClient = axios.create({
+  baseURL: getBaseUrl(),
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
 
-// 取得 JWT 認證 Header
-const getAuthHeaders = () => {
-  const headers = { 'Content-Type': 'application/json' }
+// 3. Request 攔截器：自動附加 JWT Bearer Token 與動態 baseURL
+apiClient.interceptors.request.use((config) => {
+  config.baseURL = getBaseUrl()
+
   try {
     const saved = localStorage.getItem('suzuki_sui_motolog_auth')
     if (saved) {
       const parsed = JSON.parse(saved)
       if (parsed.token) {
-        headers['Authorization'] = `Bearer ${parsed.token}`
+        config.headers.Authorization = `Bearer ${parsed.token}`
       }
     }
   } catch (e) {}
-  return headers
-}
+  return config
+}, (error) => {
+  return Promise.reject(error)
+})
 
+// 4. Response 攔截器：統一處理錯誤
+apiClient.interceptors.response.use((response) => {
+  return response
+}, (error) => {
+  if (error.response && error.response.status === 401) {
+    console.warn('⚠️ 憑證已過期，請重新登入')
+  }
+  return Promise.reject(error)
+})
 
-
-
-// 欄位名稱轉換輔助函數 (snake_case -> camelCase)
-const formatFuelFromBackend = (item) => ({
+// 5. 欄位名稱轉換輔助函數 (snake_case -> camelCase)
+export const formatFuelFromBackend = (item) => ({
   id: item.id,
   vehicleId: item.vehicle_id,
   date: item.date,
@@ -54,24 +76,37 @@ const formatFuelFromBackend = (item) => ({
   gasStation: item.gas_station || '台灣中油',
   tripDistance: Number(item.trip_distance || 0),
   efficiency: Number(item.efficiency || 0),
-  fullTank: item.full_tank !== false,
+  fullTank: item.is_full !== 0 && item.full_tank !== false,
   note: item.note || ''
 })
 
-const formatMaintFromBackend = (item) => ({
-  id: item.id,
-  vehicleId: item.vehicle_id,
-  date: item.date,
-  odometer: Number(item.odometer),
-  title: item.title,
-  shopName: item.shop_name || 'SUZUKI 經銷門市',
-  cost: Number(item.cost || 0),
-  items: Array.isArray(item.items) ? item.items : [],
-  note: item.note || '',
-  receiptImage: item.receipt_image || ''
-})
+export const formatMaintFromBackend = (item) => {
+  let parsedItems = []
+  if (Array.isArray(item.items)) {
+    parsedItems = item.items
+  } else if (typeof item.items === 'string' && item.items.trim()) {
+    try {
+      parsedItems = JSON.parse(item.items)
+    } catch (e) {
+      parsedItems = [item.items]
+    }
+  }
 
-const formatModFromBackend = (item) => ({
+  return {
+    id: item.id,
+    vehicleId: item.vehicle_id,
+    date: item.date,
+    odometer: Number(item.odometer),
+    title: item.title || '定期保養',
+    shopName: item.shop || item.shop_name || 'SUZUKI 經銷門市',
+    cost: Number(item.cost || 0),
+    items: parsedItems,
+    note: item.note || '',
+    receiptImage: item.invoice_image_url || item.receipt_image || ''
+  }
+}
+
+export const formatModFromBackend = (item) => ({
   id: item.id,
   vehicleId: item.vehicle_id,
   date: item.date,
@@ -86,123 +121,102 @@ const formatModFromBackend = (item) => ({
   imageUrl: item.image_url || ''
 })
 
+// 6. 核心 API 導出 (所有路徑 100% 明確包含 /api 前綴)
 export const api = {
-  // 身份驗證 API (SaaS 多用戶支援)
-  async register(username, email, password) {
-    const res = await fetch(`${API_BASE}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
-    })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.detail || '註冊失敗')
-    }
-    return res.json()
-  },
-
-  async login(email, password) {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.detail || '登入失敗')
-    }
-    return res.json()
-  },
-
-  async loginWithGoogle(email, name, sub, picture) {
-    const res = await fetch(`${API_BASE}/api/auth/google`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name, sub, picture })
-    })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.detail || 'Google 登入失敗')
-    }
-    return res.json()
-  },
-
-
-  async getMe() {
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: getAuthHeaders(),
-      cache: 'no-cache'
-    })
-    if (!res.ok) throw new Error('未登入或憑證已過期')
-    return res.json()
-  },
-
   // 健康檢查
   async checkHealth() {
     try {
-      const res = await fetch(`${API_BASE}/`, { method: 'GET', cache: 'no-cache' })
-      return res.ok
+      const res = await apiClient.get('/')
+      return res.status === 200
     } catch (e) {
       return false
     }
   },
 
-  // 車輛
+  // 身份驗證 API
+  async register(username, email, password) {
+    try {
+      const res = await apiClient.post('/api/auth/register', { username, email, password })
+      return res.data
+    } catch (err) {
+      const msg = err.response?.data?.detail || '註冊失敗'
+      throw new Error(msg)
+    }
+  },
+
+  async login(email, password) {
+    try {
+      const res = await apiClient.post('/api/auth/login', { email, password })
+      return res.data
+    } catch (err) {
+      const msg = err.response?.data?.detail || '登入失敗，請檢查帳號密碼'
+      throw new Error(msg)
+    }
+  },
+
+  async loginWithGoogle(credential, profile = {}) {
+    try {
+      const res = await apiClient.post('/api/auth/google', {
+        email: profile.email,
+        name: profile.name,
+        sub: profile.sub,
+        picture: profile.picture
+      })
+      return res.data
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Google 授權驗證失敗'
+      throw new Error(msg)
+    }
+  },
+
+  async getMe() {
+    const res = await apiClient.get('/api/auth/me')
+    return res.data
+  },
+
+  // 1. 車輛與儀表板 API
   async getVehicle() {
-    const res = await fetch(`${API_BASE}/api/vehicle`, {
-      headers: getAuthHeaders(),
-      cache: 'no-cache'
-    })
-    if (!res.ok) throw new Error('Failed to fetch vehicle')
-    const data = await res.json()
+    const res = await apiClient.get('/api/vehicle')
+    const data = res.data
     return {
       id: data.id,
       name: data.name,
-      brand: data.brand,
-      model: data.model,
+      brand: data.brand || 'SUZUKI',
+      model: data.model || 'SUI 125',
       tankCapacity: data.tank_capacity,
       fuelType: data.fuel_type,
       currentOdo: data.current_odo,
-      licensePlate: data.license_plate,
-      note: data.note
+      licensePlate: data.plate_number || data.license_plate || 'MY-SUI125',
+      note: data.note || ''
     }
   },
 
   async updateVehicle(data) {
     const payload = {
-      id: data.id || 'sui-125-default',
-      name: data.name,
-      brand: data.brand,
-      model: data.model,
+      name: data.name || 'SUZUKI SUI 125',
       tank_capacity: Number(data.tankCapacity || 5.5),
       fuel_type: data.fuelType || '92',
-      current_odo: Number(data.currentOdo || 300),
-      license_plate: data.licensePlate || 'ABC-1234',
+      current_odo: Number(data.currentOdo || 0),
+      plate_number: data.licensePlate || data.plateNumber || 'MY-SUI125',
       note: data.note || ''
     }
-    const res = await fetch(`${API_BASE}/api/vehicle`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error('Failed to update vehicle')
-    return res.json()
+    const res = await apiClient.post('/api/vehicle', payload)
+    return res.data
   },
 
-  // 加油紀錄
+  async updateOdometer(newOdo) {
+    const res = await apiClient.patch(`/api/vehicle/odometer?new_odo=${newOdo}`)
+    return res.data
+  },
+
+  // 2. 加油紀錄 API
   async getFuelLogs() {
-    const res = await fetch(`${API_BASE}/api/fuel`, {
-      headers: getAuthHeaders(),
-      cache: 'no-cache'
-    })
-    if (!res.ok) throw new Error('Failed to fetch fuel logs')
-    const list = await res.json()
-    return list.map(formatFuelFromBackend)
+    const res = await apiClient.get('/api/fuel')
+    return res.data.map(formatFuelFromBackend)
   },
 
   async createFuelLog(log) {
     const payload = {
-      id: log.id,
       date: log.date,
       odometer: Number(log.odometer),
       liters: Number(log.liters),
@@ -215,121 +229,85 @@ export const api = {
       full_tank: log.fullTank !== false,
       note: log.note || ''
     }
-    const res = await fetch(`${API_BASE}/api/fuel`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error('Failed to create fuel log')
-    return res.json()
+    const res = await apiClient.post('/api/fuel', payload)
+    return res.data
   },
 
   async deleteFuelLog(id) {
-    const res = await fetch(`${API_BASE}/api/fuel/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    })
-    if (!res.ok) throw new Error('Failed to delete fuel log')
-    return res.json()
+    const res = await apiClient.delete(`/api/fuel/${id}`)
+    return res.data
   },
 
-  // 保養紀錄
+  // 3. 保養紀錄 API
   async getMaintenanceLogs() {
-    const res = await fetch(`${API_BASE}/api/maintenance`, {
-      headers: getAuthHeaders(),
-      cache: 'no-cache'
-    })
-    if (!res.ok) throw new Error('Failed to fetch maintenance logs')
-    const list = await res.json()
-    return list.map(formatMaintFromBackend)
+    const res = await apiClient.get('/api/maintenance')
+    return res.data.map(formatMaintFromBackend)
   },
 
   async createMaintenanceLog(log) {
     const payload = {
-      id: log.id,
       date: log.date,
       odometer: Number(log.odometer),
-      title: log.title,
-      shop_name: log.shopName || 'SUZUKI 形象店',
+      title: log.title || '定期保養',
+      shop: log.shopName || log.shop || 'SUZUKI 經銷門市',
       cost: Number(log.cost || 0),
       items: log.items || [],
       note: log.note || '',
-      receipt_image: log.receiptImage || ''
+      invoice_image_url: log.receiptImage || log.invoice_image_url || ''
     }
-    const res = await fetch(`${API_BASE}/api/maintenance`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error('Failed to create maintenance log')
-    return res.json()
+    const res = await apiClient.post('/api/maintenance', payload)
+    return res.data
   },
 
   async deleteMaintenanceLog(id) {
-    const res = await fetch(`${API_BASE}/api/maintenance/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    })
-    if (!res.ok) throw new Error('Failed to delete maintenance log')
-    return res.json()
+    const res = await apiClient.delete(`/api/maintenance/${id}`)
+    return res.data
   },
 
-  // 改裝日誌
+  // 4. 改裝紀錄 API
   async getModifications() {
-    const res = await fetch(`${API_BASE}/api/modifications`, {
-      headers: getAuthHeaders(),
-      cache: 'no-cache'
-    })
-    if (!res.ok) throw new Error('Failed to fetch modifications')
-    const list = await res.json()
-    return list.map(formatModFromBackend)
+    const res = await apiClient.get('/api/modifications')
+    return res.data.map(formatModFromBackend)
   },
 
   async createModification(mod) {
     const payload = {
-      id: mod.id,
       date: mod.date,
       odometer: Number(mod.odometer || 0),
       title: mod.title,
       category: mod.category || 'exterior',
       cost: Number(mod.cost || 0),
-      bought_from: mod.boughtFrom || '',
+      bought_from: mod.boughtFrom || mod.bought_from || '',
       status: mod.status || 'installed',
       rating: Number(mod.rating || 5),
       note: mod.note || '',
-      image_url: mod.imageUrl || ''
+      image_url: mod.imageUrl || mod.image_url || ''
     }
-    const res = await fetch(`${API_BASE}/api/modifications`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error('Failed to create modification')
-    return res.json()
+    const res = await apiClient.post('/api/modifications', payload)
+    return res.data
   },
 
   async deleteModification(id) {
-    const res = await fetch(`${API_BASE}/api/modifications/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
-    })
-    if (!res.ok) throw new Error('Failed to delete modification')
-    return res.json()
+    const res = await apiClient.delete(`/api/modifications/${id}`)
+    return res.data
   },
 
-  // AI 診斷
-  async askAi(query, currentOdo = 0, vehicleModel = 'Suzuki SUI 125') {
-    const res = await fetch(`${API_BASE}/api/ai/diagnosis`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query,
-        current_odo: currentOdo,
-        vehicle_model: vehicleModel
-      })
+  async uploadImage(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await apiClient.post('/api/modifications/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
-    if (!res.ok) throw new Error('Failed to query AI')
-    return res.json()
+    return res.data
+  },
+
+  // 5. AI 健檢 API
+  async diagnoseVehicle(query, currentOdo = 0) {
+    const res = await apiClient.post('/api/ai/diagnose', {
+      query,
+      current_odo: currentOdo,
+      vehicle_model: 'Suzuki SUI 125'
+    })
+    return res.data
   }
 }
-

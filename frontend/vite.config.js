@@ -37,6 +37,14 @@ export default defineConfig({
 
   server: {
     port: 5173,
-    host: true
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'https://suzuki-n9ey.onrender.com',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 })
+
