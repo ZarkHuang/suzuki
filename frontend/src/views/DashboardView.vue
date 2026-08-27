@@ -55,7 +55,7 @@ const maintProgress = computed(() => {
       <div class="cockpit-header">
         <div class="model-badge">
           <span class="suzuki-red-dot"></span>
-          <span>SUZUKI SUI 125</span>
+          <span>{{ store.vehicle.brand || 'SUZUKI' }} {{ store.vehicle.model || store.vehicle.name || 'SUI 125' }}</span>
         </div>
         <button class="btn-update-odo" @click="showOdoModal = true">
           <Gauge :size="14" /> 更新里程

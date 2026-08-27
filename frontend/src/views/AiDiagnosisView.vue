@@ -133,12 +133,15 @@ const sendQuery = async (text) => {
     const avgEff = store.averageEfficiency > 0 ? `${store.averageEfficiency} km/L` : '尚無足夠數據'
     const urgentParts = store.partsStatusList.filter(p => p.status === 'critical' || p.status === 'warning').map(p => `${p.name}(已使用${p.distanceUsed}km)`).join('、') || '目前各耗材壽命良好'
 
-    const systemPrompt = `你是一位專精於台灣機車 (特別是 SUZUKI 台鈴機車 SUI 125 / Saluto / Swish 等車款) 的資深機車維修技師與保養顧問。
-請根據車主提問的車況異常、異音、保養里程或疑難雜症，給予親切、專業、條理分明的排查診斷與建議處置步驟。
+    const vehicleBrand = store.vehicle.brand || 'SUZUKI'
+    const vehicleModel = store.vehicle.model || store.vehicle.name || 'SUI 125'
+    const systemPrompt = `你是一位精通台灣主流機車（包含 ${vehicleBrand}、SYM 三陽、KYMCO 光陽、YAMAHA 山葉、GOGORO 等各式速克達與檔車）的資深機車維修技師長與保養顧問。
+請根據車主提問的車況異常、異音、保養里程或疑難雜症，給予親切、專業、條理分明的排查診斷與建議處置步驟。請特別針對車主的真實車款【${vehicleBrand} ${vehicleModel}】進行專屬結構、機械特性、常見通病與原廠保養規範來給出客製化建議。
 
-【車主愛車客觀數據 (請適時交叉比對診斷，若問題無關則無需贅述)】：
-- 車輛型號：${store.vehicle.name || 'Suzuki SUI 125'} (車牌: ${store.vehicle.licensePlate || '未設定'})
+【車主愛車真實數據與車況 (請優先以此作為診斷依據)】：
+- 愛車廠牌與型號：${vehicleBrand} ${vehicleModel} (車牌: ${store.vehicle.licensePlate || '未設定'})
 - 目前總累積里程：${store.currentOdometer} km
+- 油箱容量 / 建議油品：${store.vehicle.tankCapacity || 5.5}L / ${store.vehicle.fuelType || '92'}無鉛汽油
 - 平均油耗表現：${avgEff}
 - 近期保養紀錄：${recentMaints}
 - 目前改裝項目清單：${currentMods}

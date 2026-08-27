@@ -180,11 +180,14 @@ export const api = {
 
   async updateVehicle(data) {
     const payload = {
-      name: data.name || 'SUZUKI SUI 125',
+      name: data.name || `${data.brand || 'SUZUKI'} ${data.model || 'SUI 125'}`,
+      brand: data.brand || 'SUZUKI',
+      model: data.model || 'SUI 125',
       tank_capacity: Number(data.tankCapacity || 5.5),
       fuel_type: data.fuelType || '92',
       current_odo: Number(data.currentOdo || 0),
       plate_number: data.licensePlate || data.plateNumber || 'MY-SUI125',
+      license_plate: data.licensePlate || data.plateNumber || 'MY-SUI125',
       note: data.note || ''
     }
     const res = await apiClient.post('/api/vehicle', payload)

@@ -17,16 +17,54 @@ import {
   User,
   LogIn,
   LogOut,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-vue-next'
 
 const store = useMotoStore()
 
-const vehicle = ref({ ...store.vehicle })
+const brands = [
+  { value: 'SUZUKI', label: 'SUZUKI (台鈴機車)' },
+  { value: 'SYM', label: 'SYM (三陽機車)' },
+  { value: 'KYMCO', label: 'KYMCO (光陽機車)' },
+  { value: 'YAMAHA', label: 'YAMAHA (山葉機車)' },
+  { value: 'GOGORO', label: 'GOGORO (睿能創意)' },
+  { value: 'HONDA', label: 'HONDA (本田機車)' },
+  { value: 'VESPA', label: 'VESPA (偉士牌)' },
+  { value: 'PGO', label: 'PGO (摩特動力)' },
+  { value: 'AEON', label: 'AEON (宏佳騰)' },
+  { value: 'OTHER', label: '其他廠牌 (自行填寫)' }
+]
+
+const currentBrand = (store.vehicle?.brand || 'SUZUKI').split(' ')[0]
+const isKnownBrand = brands.some(b => b.value === currentBrand)
+
+const selectedBrand = ref(isKnownBrand ? currentBrand : (store.vehicle?.brand ? 'OTHER' : 'SUZUKI'))
+const customBrand = ref(selectedBrand.value === 'OTHER' ? (store.vehicle?.brand || '') : '')
+
+const vehicle = ref({
+  ...store.vehicle,
+  brand: store.vehicle?.brand || 'SUZUKI',
+  model: store.vehicle?.model || store.vehicle?.name || 'SUI 125'
+})
+
 const settings = ref({ ...store.settings })
-const saveSuccess = ref(false)
-const isTesting = ref(false)
 const showLogoutModal = ref(false)
+const saveToast = ref({ show: false, type: 'success', message: '' })
+
+const onBrandChange = () => {
+  if (selectedBrand.value !== 'OTHER') {
+    vehicle.value.brand = selectedBrand.value
+  } else {
+    vehicle.value.brand = customBrand.value || '其他廠牌'
+  }
+}
+
+const onCustomBrandInput = () => {
+  if (selectedBrand.value === 'OTHER') {
+    vehicle.value.brand = customBrand.value
+  }
+}
 
 const confirmLogout = () => {
   showLogoutModal.value = false
@@ -34,22 +72,35 @@ const confirmLogout = () => {
 }
 
 const saveSettings = async () => {
+  if (selectedBrand.value === 'OTHER') {
+    vehicle.value.brand = customBrand.value || '其他廠牌'
+  } else {
+    vehicle.value.brand = selectedBrand.value
+  }
+  vehicle.value.name = `${vehicle.value.brand} ${vehicle.value.model || ''}`.trim()
+
   store.vehicle = { ...store.vehicle, ...vehicle.value }
   store.settings = { ...store.settings, ...settings.value }
   store.persist()
 
-  // 直接調用 API 寫入 MySQL
   try {
     await api.updateVehicle(store.vehicle)
-    console.log('✅ [API] 車輛設定已成功更新至 MySQL！')
+    saveToast.value = {
+      show: true,
+      type: 'success',
+      message: `🎉 愛車【${store.vehicle.brand} ${store.vehicle.model}】設定已成功儲存並同步至雲端！`
+    }
   } catch (err) {
-    console.warn('⚠️ 更新車輛至後端失敗 (離線模式):', err)
+    saveToast.value = {
+      show: true,
+      type: 'warning',
+      message: `💾 設定已儲存於本機 (雲端連線失敗: ${err.message || '離線模式'})`
+    }
   }
 
-  saveSuccess.value = true
   setTimeout(() => {
-    saveSuccess.value = false
-  }, 2000)
+    saveToast.value.show = false
+  }, 4000)
 }
 
 
@@ -86,13 +137,22 @@ const importBackup = (e) => {
 
 <template>
   <div class="app-container settings-page">
+    <!-- 儲存結果 Toast 浮動提示 -->
+    <transition name="fade-slide">
+      <div v-if="saveToast.show" class="save-toast-banner" :class="saveToast.type">
+        <Check v-if="saveToast.type === 'success'" :size="18" class="toast-icon" />
+        <AlertTriangle v-else :size="18" class="toast-icon" />
+        <span class="toast-text">{{ saveToast.message }}</span>
+      </div>
+    </transition>
+
     <div class="page-header">
       <div>
         <h2 class="page-title">車輛與系統設定</h2>
-        <p class="page-subtitle">自訂車輛參數、保養通知與備份還原</p>
+        <p class="page-subtitle">自訂愛車廠牌機型、保養通知與備份還原</p>
       </div>
       <button class="btn btn-primary btn-sm" @click="saveSettings">
-        <Save :size="16" /> {{ saveSuccess ? '已儲存！' : '儲存設定' }}
+        <Save :size="16" /> 儲存設定
       </button>
     </div>
 
@@ -126,7 +186,7 @@ const importBackup = (e) => {
       <div v-else class="guest-box">
         <div class="guest-text">
           <p class="guest-title">目前為訪客離線模式</p>
-          <p class="guest-desc">登入或免費註冊後，您的 SUI 125 數據將 24 小時安全獨立存儲於雲端，換手機或跨電腦使用皆可無縫同步！</p>
+          <p class="guest-desc">登入或免費註冊後，您的愛車數據將 24 小時安全獨立存儲於雲端，換手機或跨電腦使用皆可無縫同步！</p>
         </div>
         <button class="btn btn-primary btn-sm" @click="store.openAuthModal">
           <LogIn :size="16" /> 立即登入 / 註冊
@@ -163,19 +223,41 @@ const importBackup = (e) => {
         <h3>車輛基本資訊</h3>
       </div>
 
-
       <div class="form-row">
         <div class="form-group flex-1">
-          <label class="form-label">車款名稱</label>
-          <input v-model="vehicle.name" type="text" class="form-input" />
+          <label class="form-label">機車廠牌</label>
+          <select v-model="selectedBrand" class="form-select" @change="onBrandChange">
+            <option v-for="b in brands" :key="b.value" :value="b.value">
+              {{ b.label }}
+            </option>
+          </select>
+        </div>
+        <div v-if="selectedBrand === 'OTHER'" class="form-group flex-1">
+          <label class="form-label">自訂廠牌名稱</label>
+          <input 
+            v-model="customBrand" 
+            type="text" 
+            class="form-input" 
+            placeholder="例如: BMW, KAWASAKI" 
+            @input="onCustomBrandInput" 
+          />
         </div>
         <div class="form-group flex-1">
-          <label class="form-label">車牌號碼</label>
-          <input v-model="vehicle.licensePlate" type="text" class="form-input" />
+          <label class="form-label">車型 / 機型名稱</label>
+          <input 
+            v-model="vehicle.model" 
+            type="text" 
+            class="form-input" 
+            placeholder="例如: Fiddle 125, SUI 125, MMBCU" 
+          />
         </div>
       </div>
 
       <div class="form-row">
+        <div class="form-group flex-1">
+          <label class="form-label">車牌號碼</label>
+          <input v-model="vehicle.licensePlate" type="text" class="form-input" placeholder="例如: ABC-1234" />
+        </div>
         <div class="form-group flex-1">
           <label class="form-label">油箱容量 (L)</label>
           <input v-model="vehicle.tankCapacity" type="number" step="0.1" class="form-input" />
@@ -670,6 +752,57 @@ const importBackup = (e) => {
 .btn-danger:hover {
   background: #c5000f;
   box-shadow: 0 0 12px rgba(230, 0, 18, 0.4);
+}
+
+/* 儲存成功 / 失敗 Toast 浮動橫幅 */
+.save-toast-banner {
+  position: sticky;
+  top: 10px;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.save-toast-banner.success {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 78, 59, 0.85));
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  color: #a7f3d0;
+}
+
+.save-toast-banner.warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(120, 53, 15, 0.85));
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #fde68a;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+}
+
+.toast-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* 浮入浮出動畫 */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.96);
 }
 </style>
 

@@ -9,6 +9,17 @@ const store = useMotoStore()
 
 const nextMaint = computed(() => store.nextMaintenance)
 const isUrgent = computed(() => nextMaint.value.isUrgent)
+
+const displayBrand = computed(() => {
+  const b = store.vehicle?.brand || 'SUZUKI'
+  return b.split(' ')[0].toUpperCase()
+})
+
+const displayModel = computed(() => {
+  if (store.vehicle?.model) return store.vehicle.model
+  if (store.vehicle?.name) return store.vehicle.name
+  return 'SUI 125'
+})
 </script>
 
 <template>
@@ -17,10 +28,10 @@ const isUrgent = computed(() => nextMaint.value.isUrgent)
       <!-- 車輛 Logo 與名稱 (俐落單行，永遠不換行) -->
       <div class="brand-badge" @click="router.push('/')">
         <div class="suzuki-s-mark">
-          <img src="/icon.svg" alt="SUI 125 Logo" class="brand-logo-img" />
+          <img src="/icon.svg" alt="Logo" class="brand-logo-img" />
         </div>
         <div class="brand-info">
-          <div class="brand-name">SUZUKI <span class="model-tag">SUI 125</span></div>
+          <div class="brand-name">{{ displayBrand }} <span class="model-tag">{{ displayModel }}</span></div>
           <div class="plate-status-row">
             <span class="plate-number">{{ store.vehicle.licensePlate || 'MY-SUI125' }}</span>
             <span 
