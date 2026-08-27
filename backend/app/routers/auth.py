@@ -58,39 +58,6 @@ def login(user_in: schemas.UserLogin, db: Session = Depends(get_db)):
         "user": user
     }
 
-@router.post("/google", response_model=schemas.Token)
-def google_auth(auth_in: schemas.GoogleAuthInput, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == auth_in.email).first()
-    if not user:
-        random_pwd = uuid.uuid4().hex
-        hashed_pwd = auth.get_password_hash(random_pwd)
-        user = models.User(
-            email=auth_in.email,
-            username=auth_in.name or "Google車主",
-            hashed_password=hashed_pwd
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-        init_vehicle = models.Vehicle(
-            user_id=user.id,
-            name="SUZUKI SUI 125",
-            plate_number="MY-SUI125",
-            current_odo=0,
-            tank_capacity=5.5,
-            fuel_type="92"
-        )
-        db.add(init_vehicle)
-        db.commit()
-
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user
-    }
-
 @router.get("/me", response_model=schemas.UserResponse)
 def get_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
