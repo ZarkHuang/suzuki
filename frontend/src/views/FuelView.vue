@@ -44,10 +44,11 @@ const store = useMotoStore()
 const showAddModal = ref(false)
 const timeRange = ref('all') // 'week' | 'month' | 'year' | 'all'
 
-// 每次進入加油紀錄畫面，自動從 MySQL 雲端刷新最新數據
+// 進入加油畫面時，精準僅同步加油紀錄 (/api/fuel)
 onMounted(() => {
-  store.initSyncWithBackend()
+  store.syncFuelLogs()
 })
+
 
 
 const fuelLogs = computed(() => store.fuelLogs)

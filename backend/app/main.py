@@ -110,7 +110,9 @@ def init_db_schema():
         ("vehicles", "current_odo", "INT DEFAULT 0"),
         ("vehicles", "tank_capacity", "FLOAT DEFAULT 5.5"),
         ("vehicles", "fuel_type", "VARCHAR(20) DEFAULT '92'"),
+        ("vehicles", "updated_at", "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"),
         ("fuel_logs", "user_id", "INT NULL"),
+
         ("fuel_logs", "price_per_liter", "FLOAT DEFAULT 30.2"),
         ("fuel_logs", "fuel_type", "VARCHAR(20) DEFAULT '92'"),
         ("fuel_logs", "gas_station", "VARCHAR(50) DEFAULT '台灣中油'"),

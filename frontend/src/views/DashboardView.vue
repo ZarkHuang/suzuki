@@ -26,10 +26,13 @@ const showOdoModal = ref(false)
 const showFuelModal = ref(false)
 const showMaintModal = ref(false)
 
-// 每次進入儀表板首頁，自動從 MySQL 雲端刷新最新愛車數據
+// 進入儀表首頁時，同步儀表與近期動態
 onMounted(() => {
-  store.initSyncWithBackend()
+  store.syncVehicle()
+  store.syncFuelLogs()
+  store.syncMaintenanceLogs()
 })
+
 
 
 const currentOdo = computed(() => store.currentOdometer)

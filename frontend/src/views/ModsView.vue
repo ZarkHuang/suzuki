@@ -22,10 +22,11 @@ const showAddModal = ref(false)
 const selectedCategory = ref('all')
 const previewImage = ref('')
 
-// 每次進入改裝畫面，自動從 MySQL 雲端刷新最新改裝清單
+// 進入改裝畫面時，精準僅同步改裝清單 (/api/modifications)
 onMounted(() => {
-  store.initSyncWithBackend()
+  store.syncModifications()
 })
+
 
 
 const modifications = computed(() => store.modifications)

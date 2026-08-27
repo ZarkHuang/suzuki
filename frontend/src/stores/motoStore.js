@@ -285,8 +285,83 @@ export const useMotoStore = defineStore('moto', {
       this.initSyncWithBackend()
     },
 
-    // 初始化並從後端 MySQL 拉取最新資料 (MySQL 為準)
+    // 精準獨立同步 1: 車輛與儀表設定 (/api/vehicle)
+    async syncVehicle(force = false) {
+      const now = Date.now()
+      if (!force && this._lastVehicleSync && now - this._lastVehicleSync < 2000) return
+      this._lastVehicleSync = now
+
+      try {
+        const v = await api.getVehicle()
+        if (v) {
+          this.vehicle = { ...this.vehicle, ...v }
+          this.isBackendOnline = true
+          this.persist()
+        }
+      } catch (err) {
+        console.warn('Sync vehicle failed:', err)
+      }
+    },
+
+    // 精準獨立同步 2: 加油紀錄 (/api/fuel)
+    async syncFuelLogs(force = false) {
+      const now = Date.now()
+      if (!force && this._lastFuelSync && now - this._lastFuelSync < 2000) return
+      this._lastFuelSync = now
+
+      try {
+        const fuels = await api.getFuelLogs()
+        if (Array.isArray(fuels)) {
+          this.fuelLogs = fuels
+          this.isBackendOnline = true
+          this.persist()
+        }
+      } catch (err) {
+        console.warn('Sync fuel logs failed:', err)
+      }
+    },
+
+    // 精準獨立同步 3: 保養紀錄 (/api/maintenance)
+    async syncMaintenanceLogs(force = false) {
+      const now = Date.now()
+      if (!force && this._lastMaintSync && now - this._lastMaintSync < 2000) return
+      this._lastMaintSync = now
+
+      try {
+        const maints = await api.getMaintenanceLogs()
+        if (Array.isArray(maints)) {
+          this.maintenanceLogs = maints
+          this.isBackendOnline = true
+          this.persist()
+        }
+      } catch (err) {
+        console.warn('Sync maintenance logs failed:', err)
+      }
+    },
+
+    // 精準獨立同步 4: 改裝紀錄 (/api/modifications)
+    async syncModifications(force = false) {
+      const now = Date.now()
+      if (!force && this._lastModSync && now - this._lastModSync < 2000) return
+      this._lastModSync = now
+
+      try {
+        const mods = await api.getModifications()
+        if (Array.isArray(mods)) {
+          this.modifications = mods
+          this.isBackendOnline = true
+          this.persist()
+        }
+      } catch (err) {
+        console.warn('Sync modifications failed:', err)
+      }
+    },
+
+    // 全局一次性初始化同步
     async initSyncWithBackend() {
+      const now = Date.now()
+      if (this._lastGlobalSync && now - this._lastGlobalSync < 3000) return
+      this._lastGlobalSync = now
 
       this.isSyncing = true
       try {
@@ -294,9 +369,6 @@ export const useMotoStore = defineStore('moto', {
         this.isBackendOnline = online
 
         if (online) {
-          console.log('✅ 後端連線成功，正在從 MySQL 同步最新資料...')
-          
-          // 抓取 MySQL 最新資料
           const [v, fuels, maints, mods] = await Promise.all([
             api.getVehicle().catch(() => null),
             api.getFuelLogs().catch(() => []),
@@ -304,12 +376,11 @@ export const useMotoStore = defineStore('moto', {
             api.getModifications().catch(() => [])
           ])
 
-          // MySQL 雲端數據為唯一真理：直接同步並覆蓋前端
-          if (v) this.vehicle = v
-          this.fuelLogs = fuels
-          this.maintenanceLogs = maints
-          this.modifications = mods
-          console.log(`✅ 已從 MySQL 同步：${fuels.length} 筆加油、${maints.length} 筆保養、${mods.length} 筆改裝`)
+          if (v) this.vehicle = { ...this.vehicle, ...v }
+          if (Array.isArray(fuels)) this.fuelLogs = fuels
+          if (Array.isArray(maints)) this.maintenanceLogs = maints
+          if (Array.isArray(mods)) this.modifications = mods
+          console.log(`✅ 已從 MySQL 完成初始化同步`)
         }
       } catch (err) {
         console.warn('後端連線異常，將運行於離線 LocalStorage 模式:', err)
@@ -319,6 +390,7 @@ export const useMotoStore = defineStore('moto', {
         this.persist()
       }
     },
+
 
 
 

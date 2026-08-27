@@ -30,9 +30,9 @@ class Vehicle(Base):
     current_odo = Column(Integer, default=0)
     tank_capacity = Column(Float, default=5.5)
     fuel_type = Column(String(20), default="92 無鉛汽油")
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="vehicles")
+
 
 # 加油紀錄
 class FuelLog(Base):

@@ -23,10 +23,12 @@ const showAddModal = ref(false)
 const selectedPreset = ref(null)
 const activeTab = ref('schedule') // 'schedule' | 'history' | 'parts'
 
-// 每次進入保養畫面，自動從 MySQL 雲端刷新最新數據
+// 進入保養畫面時，精準僅同步保養日誌與車輛里程
 onMounted(() => {
-  store.initSyncWithBackend()
+  store.syncMaintenanceLogs()
+  store.syncVehicle()
 })
+
 
 
 const currentOdo = computed(() => store.currentOdometer)
