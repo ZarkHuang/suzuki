@@ -29,7 +29,7 @@ class Token(BaseModel):
 
 # ================= 車輛相關 Schemas =================
 class VehicleBase(BaseModel):
-    id: Optional[str] = None
+    id: Optional[Any] = None
     name: Optional[str] = "SUZUKI SUI 125"
     brand: Optional[str] = "SUZUKI"
     model: Optional[str] = "SUI 125"
@@ -44,7 +44,7 @@ class VehicleUpdate(VehicleBase):
     pass
 
 class VehicleResponse(VehicleBase):
-    id: Optional[str] = None
+    id: Optional[Any] = None
     class Config:
         from_attributes = True
 

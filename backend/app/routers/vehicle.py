@@ -71,8 +71,12 @@ def update_vehicle(
             db.add(vehicle)
 
         update_data = vehicle_in.dict(exclude_unset=True)
+        update_data.pop("id", None)
+        update_data.pop("user_id", None)
         if "license_plate" in update_data and "plate_number" not in update_data:
             update_data["plate_number"] = update_data["license_plate"]
+        elif "plate_number" in update_data and "license_plate" not in update_data:
+            update_data["license_plate"] = update_data["plate_number"]
 
         for field, value in update_data.items():
             if hasattr(vehicle, field) and value is not None:
@@ -83,8 +87,8 @@ def update_vehicle(
         return vehicle
     except Exception as e:
         db.rollback()
-        print(f"⚠️ update_vehicle fallback: {e}")
-        return vehicle_in
+        print(f"⚠️ update_vehicle error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/odometer")
 def update_odometer(
