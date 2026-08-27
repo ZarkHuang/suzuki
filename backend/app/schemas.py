@@ -174,3 +174,23 @@ class AiDiagnosisResponse(BaseModel):
     urgency: str
     suggested_actions: List[str]
 
+# ================= 通用分頁 Schemas =================
+class PaginationInfo(BaseModel):
+    page: int
+    page_size: int
+    page_total: int
+    data_total: int
+
+class PaginatedFuelLogResponse(BaseModel):
+    list: List[FuelLogResponse]
+    pagination: PaginationInfo
+
+class PaginatedMaintenanceLogResponse(BaseModel):
+    list: List[MaintenanceLogResponse]
+    pagination: PaginationInfo
+
+class PaginatedModificationResponse(BaseModel):
+    list: List[ModificationResponse]
+    pagination: PaginationInfo
+
+

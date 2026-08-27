@@ -202,7 +202,8 @@ export const api = {
   // 2. 加油紀錄 API
   async getFuelLogs(params = {}) {
     const res = await apiClient.get('/api/fuel', { params })
-    return res.data.map(formatFuelFromBackend)
+    const rawList = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    return rawList.map(formatFuelFromBackend)
   },
 
   async createFuelLog(log) {
@@ -231,7 +232,8 @@ export const api = {
   // 3. 保養紀錄 API
   async getMaintenanceLogs(params = {}) {
     const res = await apiClient.get('/api/maintenance', { params })
-    return res.data.map(formatMaintFromBackend)
+    const rawList = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    return rawList.map(formatMaintFromBackend)
   },
 
   async createMaintenanceLog(log) {
@@ -257,7 +259,8 @@ export const api = {
   // 4. 改裝紀錄 API
   async getModifications(params = {}) {
     const res = await apiClient.get('/api/modifications', { params })
-    return res.data.map(formatModFromBackend)
+    const rawList = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+    return rawList.map(formatModFromBackend)
   },
 
   async createModification(mod) {

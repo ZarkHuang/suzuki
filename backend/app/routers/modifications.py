@@ -1,3 +1,4 @@
+import math
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,24 +13,47 @@ router = APIRouter(prefix="/api/modifications", tags=["Modifications 改裝日�
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.get("", response_model=List[schemas.ModificationResponse])
+@router.get("", response_model=schemas.PaginatedModificationResponse)
 def get_modifications(
+    page: int = 1,
+    page_size: int = 10,
     limit: Optional[int] = None,
-    offset: int = 0,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
     try:
-        query = db.query(models.Modification).filter(models.Modification.user_id == user.id).order_by(models.Modification.odometer.desc())
-        if offset > 0:
-            query = query.offset(offset)
-        if limit is not None and limit > 0:
-            query = query.limit(limit)
-        return query.all()
+        base_query = db.query(models.Modification).filter(models.Modification.user_id == user.id)
+        data_total = base_query.count()
+
+        actual_page_size = limit if (limit is not None and limit > 0) else (page_size if page_size > 0 else 10)
+        actual_page = page if page > 0 else 1
+        actual_offset = offset if (offset is not None and offset >= 0) else ((actual_page - 1) * actual_page_size)
+
+        logs = base_query.order_by(models.Modification.odometer.desc()).offset(actual_offset).limit(actual_page_size).all()
+        page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else (1 if data_total == 0 else 1)
+
+        return {
+            "list": logs,
+            "pagination": {
+                "page": actual_page,
+                "page_size": actual_page_size,
+                "page_total": page_total,
+                "data_total": data_total
+            }
+        }
     except Exception as e:
         db.rollback()
         print(f"⚠️ get_modifications fallback: {e}")
-        return []
+        return {
+            "list": [],
+            "pagination": {
+                "page": 1,
+                "page_size": 10,
+                "page_total": 0,
+                "data_total": 0
+            }
+        }
 
 
 @router.post("", response_model=schemas.ModificationResponse, status_code=status.HTTP_201_CREATED)

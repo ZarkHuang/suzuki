@@ -1,3 +1,4 @@
+import math
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -8,24 +9,48 @@ from ..database import get_db
 
 router = APIRouter(prefix="/api/fuel", tags=["Fuel 加油與油耗紀錄"])
 
-@router.get("", response_model=List[schemas.FuelLogResponse])
+@router.get("", response_model=schemas.PaginatedFuelLogResponse)
 def get_fuel_logs(
+    page: int = 1,
+    page_size: int = 10,
     limit: Optional[int] = None,
-    offset: int = 0,
+    offset: Optional[int] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
     try:
-        query = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc())
-        if offset > 0:
-            query = query.offset(offset)
-        if limit is not None and limit > 0:
-            query = query.limit(limit)
-        return query.all()
+        base_query = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id)
+        data_total = base_query.count()
+
+        # 若有傳入 limit，以 limit 為單頁筆數
+        actual_page_size = limit if (limit is not None and limit > 0) else (page_size if page_size > 0 else 10)
+        actual_page = page if page > 0 else 1
+        actual_offset = offset if (offset is not None and offset >= 0) else ((actual_page - 1) * actual_page_size)
+
+        logs = base_query.order_by(models.FuelLog.odometer.desc()).offset(actual_offset).limit(actual_page_size).all()
+        page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else (1 if data_total == 0 else 1)
+
+        return {
+            "list": logs,
+            "pagination": {
+                "page": actual_page,
+                "page_size": actual_page_size,
+                "page_total": page_total,
+                "data_total": data_total
+            }
+        }
     except Exception as e:
         db.rollback()
         print(f"⚠️ get_fuel_logs fallback: {e}")
-        return []
+        return {
+            "list": [],
+            "pagination": {
+                "page": 1,
+                "page_size": 10,
+                "page_total": 0,
+                "data_total": 0
+            }
+        }
 
 
 @router.post("", response_model=schemas.FuelLogResponse, status_code=status.HTTP_201_CREATED)
