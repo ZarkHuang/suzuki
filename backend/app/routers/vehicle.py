@@ -17,7 +17,10 @@ def get_vehicle(
         vehicle = models.Vehicle(
             user_id=user.id,
             name="SUZUKI SUI 125",
+            brand="SUZUKI",
+            model="SUI 125",
             plate_number="MY-SUI125",
+            license_plate="MY-SUI125",
             current_odo=0,
             tank_capacity=5.5,
             fuel_type="92"
@@ -39,7 +42,10 @@ def update_vehicle(
         vehicle = models.Vehicle(
             user_id=user.id,
             name="SUZUKI SUI 125",
+            brand="SUZUKI",
+            model="SUI 125",
             plate_number="MY-SUI125",
+            license_plate="MY-SUI125",
             current_odo=0,
             tank_capacity=5.5,
             fuel_type="92"

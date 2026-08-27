@@ -13,13 +13,6 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-class GoogleAuthInput(BaseModel):
-    email: str
-    name: str
-    sub: Optional[str] = None
-    picture: Optional[str] = None
-
-
 class Token(BaseModel):
 
     access_token: str

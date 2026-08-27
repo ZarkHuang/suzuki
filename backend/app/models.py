@@ -19,17 +19,20 @@ class User(Base):
     maintenance_logs = relationship("MaintenanceLog", back_populates="owner", cascade="all, delete-orphan")
     modifications = relationship("Modification", back_populates="owner", cascade="all, delete-orphan")
 
-# 車輛基礎設定
 class Vehicle(Base):
     __tablename__ = "vehicles"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     name = Column(String(50), default="SUZUKI SUI 125")
-    plate_number = Column(String(20), default="MY-SUI125")
+    brand = Column(String(50), default="SUZUKI", nullable=True)
+    model = Column(String(50), default="SUI 125", nullable=True)
+    plate_number = Column(String(20), default="MY-SUI125", nullable=True)
+    license_plate = Column(String(20), default="MY-SUI125", nullable=True)
     current_odo = Column(Integer, default=0)
     tank_capacity = Column(Float, default=5.5)
     fuel_type = Column(String(20), default="92 無鉛汽油")
+    note = Column(Text, nullable=True)
 
     owner = relationship("User", back_populates="vehicles")
 

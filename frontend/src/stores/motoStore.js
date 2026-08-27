@@ -193,22 +193,7 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // Google 一鍵登入
-    async loginWithGoogle(email, name, sub, picture) {
-      try {
-        const res = await api.loginWithGoogle(email, name, sub, picture)
-        this.authToken = res.access_token
-        this.currentUser = res.user
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
-        this.closeAuthModal()
-        this.resetToCleanState()
-        // 重新從雲端抓取該帳號專屬資料
-        await this.initSyncWithBackend(true)
-        return { success: true }
-      } catch (err) {
-        return { success: false, error: err.message }
-      }
-    },
+
 
     // 註冊
     async register(username, email, password) {

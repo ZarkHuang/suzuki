@@ -154,20 +154,7 @@ export const api = {
     }
   },
 
-  async loginWithGoogle(credential, profile = {}) {
-    try {
-      const res = await apiClient.post('/api/auth/google', {
-        email: profile.email,
-        name: profile.name,
-        sub: profile.sub,
-        picture: profile.picture
-      })
-      return res.data
-    } catch (err) {
-      const msg = err.response?.data?.detail || 'Google 授權驗證失敗'
-      throw new Error(msg)
-    }
-  },
+
 
   async getMe() {
     const res = await apiClient.get('/api/auth/me')

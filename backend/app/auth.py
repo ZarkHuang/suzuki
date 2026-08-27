@@ -1,14 +1,11 @@
 import os
 import datetime
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from . import database, models
-
-# 密碼雜湊設定
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT 金鑰設定
 SECRET_KEY = os.getenv("JWT_SECRET", "suzuki_sui_125_secret_jwt_key_2026_super_safe")
@@ -19,12 +16,16 @@ security = HTTPBearer(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        pwd_bytes = plain_password.encode('utf-8')[:72]
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
     except Exception:
         return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: datetime.timedelta = None) -> str:
     to_encode = data.copy()

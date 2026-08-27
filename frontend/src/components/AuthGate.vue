@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
 import { 
   Lock, 
@@ -7,7 +7,6 @@ import {
   User, 
   ArrowRight, 
   ShieldCheck, 
-  Sparkles, 
   Database,
   Smartphone
 } from 'lucide-vue-next'
@@ -21,83 +20,6 @@ const password = ref('')
 const errorMsg = ref('')
 const successMsg = ref('')
 const isLoading = ref(false)
-
-// 解析 Google JWT Token
-const parseJwt = (token) => {
-  try {
-    const base64Url = token.split('.')[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    return JSON.parse(jsonPayload)
-  } catch (e) {
-    return null
-  }
-}
-
-// 處理 Google 登入
-const handleGoogleCredentialResponse = async (response) => {
-  if (!response || !response.credential) return
-  isLoading.value = true
-  errorMsg.value = ''
-  successMsg.value = ''
-  try {
-    const payload = parseJwt(response.credential)
-    if (!payload || !payload.email) {
-      throw new Error('無法讀取 Google 帳號資訊')
-    }
-    const res = await store.loginWithGoogle(
-      payload.email,
-      payload.name || payload.email.split('@')[0],
-      payload.sub,
-      payload.picture
-    )
-    if (!res.success) {
-      errorMsg.value = res.error || 'Google 登入失敗'
-    }
-  } catch (err) {
-    errorMsg.value = err.message || 'Google 登入異常'
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const initGoogleGsi = () => {
-  if (typeof window !== 'undefined' && window.google && window.google.accounts) {
-    try {
-      window.google.accounts.id.initialize({
-        client_id: '753471788844-83jtr2msd112s0adrbhakipfnd3tttu9.apps.googleusercontent.com',
-        callback: handleGoogleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      })
-
-      const btnContainer = document.getElementById('gate-google-btn')
-      if (btnContainer) {
-        btnContainer.innerHTML = ''
-        window.google.accounts.id.renderButton(btnContainer, {
-          theme: 'outline',
-          size: 'large',
-          width: 320,
-          text: 'continue_with',
-          shape: 'pill'
-        })
-      }
-    } catch (e) {
-      console.warn('Google GSI Init hint:', e)
-    }
-  }
-}
-
-onMounted(() => {
-  nextTick(() => {
-    setTimeout(initGoogleGsi, 200)
-  })
-})
 
 // 處理 Email 登入
 const handleLogin = async () => {
@@ -269,16 +191,6 @@ const handleRegister = async () => {
             <ArrowRight v-if="!isLoading" :size="18" />
           </button>
         </form>
-
-        <!-- 分隔線 -->
-        <div class="gate-divider">
-          <span>或使用 Google 快速驗證</span>
-        </div>
-
-        <!-- Google 一鍵快速登入 -->
-        <div class="google-auth-box">
-          <div id="gate-google-btn" class="google-btn-slot"></div>
-        </div>
       </div>
 
       <!-- SaaS 雲端特色亮點說明 -->
@@ -481,35 +393,6 @@ const handleRegister = async () => {
 .btn-gate-submit:disabled {
   opacity: 0.7;
   cursor: not-allowed;
-}
-
-/* 分隔線 */
-.gate-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  margin: 20px 0 16px 0;
-  color: #64748b;
-  font-size: 0.78rem;
-}
-
-.gate-divider::before,
-.gate-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.gate-divider span {
-  padding: 0 10px;
-}
-
-/* Google 容器 */
-.google-auth-box {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 44px;
 }
 
 /* 特色網格 */
