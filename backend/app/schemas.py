@@ -13,20 +13,19 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-class Token(BaseModel):
-
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserResponse"
-
 class UserResponse(BaseModel):
     id: int
     email: str
     username: str
-    created_at: datetime.datetime
+    created_at: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 
 # ================= 車輛相關 Schemas =================
 class VehicleBase(BaseModel):
