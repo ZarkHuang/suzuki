@@ -15,30 +15,12 @@ import {
 import { Line, Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
+  registerables
 } from 'chart.js'
 
 import ModalAddFuel from '../components/ModalAddFuel.vue'
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-)
+ChartJS.register(...registerables)
 
 const store = useMotoStore()
 const showAddModal = ref(false)
@@ -76,16 +58,45 @@ const filteredLogs = computed(() => {
 // 圖表資料 (依日期由舊到新繪製)
 const chartData = computed(() => {
   const sorted = [...filteredLogs.value].reverse()
-  const labels = sorted.map(l => l.date.slice(5)) // MM-DD
-  const efficiencies = sorted.map(l => l.efficiency || 0)
-  const costs = sorted.map(l => l.totalCost || 0)
+  if (sorted.length === 0) {
+    return {
+      labels: ['暫無數據'],
+      datasets: [
+        {
+          label: '平均油耗 (km/L)',
+          data: [0],
+          borderColor: '#005BAC',
+          backgroundColor: 'rgba(0, 91, 172, 0.15)',
+          tension: 0.35,
+          fill: true,
+          pointBackgroundColor: '#38bdf8',
+          pointBorderColor: '#fff',
+          pointRadius: 4,
+          yAxisID: 'y'
+        },
+        {
+          label: '加油金額 (NT$)',
+          data: [0],
+          borderColor: '#E60012',
+          backgroundColor: 'rgba(230, 0, 18, 0.65)',
+          type: 'bar',
+          borderRadius: 6,
+          yAxisID: 'y1'
+        }
+      ]
+    }
+  }
+
+  const labels = sorted.map(l => (l.date ? l.date.slice(5) : ''))
+  const efficiencies = sorted.map(l => Number(l.efficiency) || 0)
+  const costs = sorted.map(l => Number(l.totalCost) || 0)
 
   return {
-    labels: labels.length > 0 ? labels : ['無資料'],
+    labels,
     datasets: [
       {
         label: '平均油耗 (km/L)',
-        data: efficiencies.length > 0 ? efficiencies : [0],
+        data: efficiencies,
         borderColor: '#005BAC',
         backgroundColor: 'rgba(0, 91, 172, 0.15)',
         tension: 0.35,
@@ -97,7 +108,7 @@ const chartData = computed(() => {
       },
       {
         label: '加油金額 (NT$)',
-        data: costs.length > 0 ? costs : [0],
+        data: costs,
         borderColor: '#E60012',
         backgroundColor: 'rgba(230, 0, 18, 0.65)',
         type: 'bar',
@@ -238,7 +249,7 @@ const deleteLog = (id) => {
       </div>
 
       <div class="chart-wrapper">
-        <Line :data="chartData" :options="chartOptions" />
+        <Line :data="chartData" :options="chartOptions" :key="timeRange + '-' + filteredLogs.length" />
       </div>
     </div>
 

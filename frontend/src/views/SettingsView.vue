@@ -92,24 +92,28 @@ const importBackup = (e) => {
 
     <!-- 車主帳號與 SaaS 雲端同步 -->
     <div class="card settings-section auth-card">
-      <div class="section-heading">
-        <User :size="18" class="icon-blue" />
-        <h3>車主帳號 (SaaS 雲端多租戶)</h3>
+      <div class="auth-header-row">
+        <div class="section-heading">
+          <User :size="18" class="icon-blue" />
+          <h3>車主帳號</h3>
+        </div>
+        <span v-if="store.isAuthenticated" class="badge-cloud">
+          <span class="dot-live"></span> 雲端資料已綁定
+        </span>
       </div>
 
       <div v-if="store.isAuthenticated" class="user-profile-box">
-        <div class="user-avatar-circle">
-          {{ store.currentUser?.username?.charAt(0) || 'U' }}
-        </div>
-        <div class="user-info-text">
-          <div class="user-name-row">
-            <span class="user-name">{{ store.currentUser?.username }}</span>
-            <span class="badge-cloud">雲端資料庫已綁定</span>
+        <div class="user-main-info">
+          <div class="user-avatar-circle">
+            {{ store.currentUser?.username?.charAt(0).toUpperCase() || 'U' }}
           </div>
-          <span class="user-email">{{ store.currentUser?.email }}</span>
+          <div class="user-info-text">
+            <div class="user-name">{{ store.currentUser?.username }}</div>
+            <div class="user-email">{{ store.currentUser?.email }}</div>
+          </div>
         </div>
-        <button class="btn btn-outline-danger btn-sm" @click="store.logout">
-          <LogOut :size="15" /> 登出帳號
+        <button class="btn btn-outline-danger btn-logout" @click="store.logout">
+          <LogOut :size="14" /> 登出
         </button>
       </div>
 
@@ -360,57 +364,106 @@ const importBackup = (e) => {
   background: linear-gradient(145deg, rgba(0, 210, 255, 0.04), rgba(20, 23, 31, 0.6));
 }
 
+.auth-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.auth-header-row .section-heading {
+  margin-bottom: 0;
+}
+
 .user-profile-box {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 0;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.user-main-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
 .user-avatar-circle {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
   border-radius: 50%;
   background: linear-gradient(135deg, #00d2ff, #0077ff);
   color: #fff;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.35);
+  flex-shrink: 0;
 }
 
 .user-info-text {
+  min-width: 0;
   flex: 1;
-}
-
-.user-name-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .user-name {
   font-weight: 700;
   color: #fff;
-  font-size: 0.98rem;
-}
-
-.badge-cloud {
-  font-size: 0.68rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  color: #34d399;
-  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-email {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-cloud {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge-cloud .dot-live {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+}
+
+.btn-logout {
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-outline-danger {
