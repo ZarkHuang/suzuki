@@ -11,12 +11,18 @@ router = APIRouter(prefix="/api/maintenance", tags=["Maintenance 保養日誌"])
 
 @router.get("", response_model=List[schemas.MaintenanceLogResponse])
 def get_maintenance_logs(
+    limit: Optional[int] = None,
+    offset: int = 0,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
     try:
-        logs = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.user_id == user.id).order_by(models.MaintenanceLog.odometer.desc()).all()
-        return logs
+        query = db.query(models.MaintenanceLog).filter(models.MaintenanceLog.user_id == user.id).order_by(models.MaintenanceLog.odometer.desc())
+        if offset > 0:
+            query = query.offset(offset)
+        if limit is not None and limit > 0:
+            query = query.limit(limit)
+        return query.all()
     except Exception as e:
         db.rollback()
         print(f"⚠️ get_maintenance_logs fallback: {e}")

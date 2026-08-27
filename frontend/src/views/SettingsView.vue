@@ -26,6 +26,12 @@ const vehicle = ref({ ...store.vehicle })
 const settings = ref({ ...store.settings })
 const saveSuccess = ref(false)
 const isTesting = ref(false)
+const showLogoutModal = ref(false)
+
+const confirmLogout = () => {
+  showLogoutModal.value = false
+  store.logout()
+}
 
 const saveSettings = async () => {
   store.vehicle = { ...store.vehicle, ...vehicle.value }
@@ -112,7 +118,7 @@ const importBackup = (e) => {
             <div class="user-email">{{ store.currentUser?.email }}</div>
           </div>
         </div>
-        <button class="btn btn-outline-danger btn-logout" @click="store.logout">
+        <button class="btn btn-outline-danger btn-logout" @click="showLogoutModal = true">
           <LogOut :size="14" /> 登出
         </button>
       </div>
@@ -125,6 +131,28 @@ const importBackup = (e) => {
         <button class="btn btn-primary btn-sm" @click="store.openAuthModal">
           <LogIn :size="16" /> 立即登入 / 註冊
         </button>
+      </div>
+    </div>
+
+    <!-- 登出確認防呆彈窗 -->
+    <div v-if="showLogoutModal" class="modal-overlay" @click.self="showLogoutModal = false">
+      <div class="modal-card logout-confirm-modal">
+        <div class="logout-icon-box">
+          <LogOut :size="26" class="icon-danger" />
+        </div>
+        <h3 class="modal-title">確定要登出車主帳號嗎？</h3>
+        <p class="modal-desc">
+          登出後將切換為訪客離線模式。<br/>
+          您的愛車數據已安全保存在雲端，可隨時重新登入同步。
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary flex-1" @click="showLogoutModal = false">
+            取消
+          </button>
+          <button class="btn btn-danger flex-1" @click="confirmLogout">
+            確定登出
+          </button>
+        </div>
       </div>
     </div>
 
@@ -584,6 +612,64 @@ const importBackup = (e) => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* 登出防呆彈窗 */
+.logout-confirm-modal {
+  max-width: 360px;
+  text-align: center;
+  padding: 24px 20px;
+}
+
+.logout-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px auto;
+}
+
+.icon-danger {
+  color: #f87171;
+}
+
+.modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.modal-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-danger {
+  background: #e60012;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+  background: #c5000f;
+  box-shadow: 0 0 12px rgba(230, 0, 18, 0.4);
 }
 </style>
 

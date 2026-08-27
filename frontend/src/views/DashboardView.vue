@@ -26,11 +26,9 @@ const showOdoModal = ref(false)
 const showFuelModal = ref(false)
 const showMaintModal = ref(false)
 
-// 進入儀表首頁時，同步儀表與近期動態
+// 進入儀表首頁時，精準僅同步車輛與前 3 筆輕量動態
 onMounted(() => {
-  store.syncVehicle()
-  store.syncFuelLogs()
-  store.syncMaintenanceLogs()
+  store.syncDashboardSummary()
 })
 
 

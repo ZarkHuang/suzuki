@@ -10,12 +10,18 @@ router = APIRouter(prefix="/api/fuel", tags=["Fuel 加油與油耗紀錄"])
 
 @router.get("", response_model=List[schemas.FuelLogResponse])
 def get_fuel_logs(
+    limit: Optional[int] = None,
+    offset: int = 0,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
     try:
-        logs = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc()).all()
-        return logs
+        query = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id).order_by(models.FuelLog.odometer.desc())
+        if offset > 0:
+            query = query.offset(offset)
+        if limit is not None and limit > 0:
+            query = query.limit(limit)
+        return query.all()
     except Exception as e:
         db.rollback()
         print(f"⚠️ get_fuel_logs fallback: {e}")

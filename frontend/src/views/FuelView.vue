@@ -37,6 +37,8 @@ const fuelLogs = computed(() => store.fuelLogs)
 const avgEfficiency = computed(() => store.averageEfficiency)
 const totalFuelCost = computed(() => store.totalExpenses.fuel)
 
+const displayLimit = ref(15)
+
 // 依時間範圍過濾資料
 const filteredLogs = computed(() => {
   const now = new Date()
@@ -54,6 +56,24 @@ const filteredLogs = computed(() => {
   }
   return logs
 })
+
+// 分頁呈現：僅渲染前 N 筆，大幅降低 DOM 節點負擔
+const paginatedLogs = computed(() => {
+  return filteredLogs.value.slice(0, displayLimit.value)
+})
+
+const hasMoreLogs = computed(() => {
+  return filteredLogs.value.length > displayLimit.value
+})
+
+const loadMore = () => {
+  displayLimit.value += 15
+}
+
+const setTimeRange = (range) => {
+  timeRange.value = range
+  displayLimit.value = 15 // 切換時間區間時重設分頁筆數
+}
 
 // 圖表資料 (依日期由舊到新繪製)
 const chartData = computed(() => {
@@ -220,28 +240,28 @@ const deleteLog = (id) => {
           <button 
             class="tab-btn" 
             :class="{ active: timeRange === 'week' }"
-            @click="timeRange = 'week'"
+            @click="setTimeRange('week')"
           >
             週
           </button>
           <button 
             class="tab-btn" 
             :class="{ active: timeRange === 'month' }"
-            @click="timeRange = 'month'"
+            @click="setTimeRange('month')"
           >
             月
           </button>
           <button 
             class="tab-btn" 
             :class="{ active: timeRange === 'year' }"
-            @click="timeRange = 'year'"
+            @click="setTimeRange('year')"
           >
             年
           </button>
           <button 
             class="tab-btn" 
             :class="{ active: timeRange === 'all' }"
-            @click="timeRange = 'all'"
+            @click="setTimeRange('all')"
           >
             總覽
           </button>
@@ -256,11 +276,11 @@ const deleteLog = (id) => {
     <!-- 加油紀錄歷史清單 -->
     <div class="history-section">
       <div class="section-title">
-        <Calendar :size="16" /> 加油歷史清單 ({{ filteredLogs.length }}筆)
+        <Calendar :size="16" /> 加油歷史清單 (共 {{ filteredLogs.length }} 筆)
       </div>
 
       <div v-if="filteredLogs.length > 0" class="history-list">
-        <div v-for="log in filteredLogs" :key="log.id" class="card log-item-card">
+        <div v-for="log in paginatedLogs" :key="log.id" class="card log-item-card">
           <div class="log-top-row">
             <div class="station-meta">
               <span class="station-tag">{{ log.gasStation || '加油站' }}</span>
@@ -303,6 +323,13 @@ const deleteLog = (id) => {
               📝 {{ log.note }}
             </span>
           </div>
+        </div>
+
+        <!-- 載入更多按鈕 -->
+        <div v-if="hasMoreLogs" class="load-more-wrapper">
+          <button class="btn btn-outline-load-more" @click="loadMore">
+            載入更多歷史紀錄 (尚有 {{ filteredLogs.length - paginatedLogs.length }} 筆)
+          </button>
         </div>
       </div>
 
@@ -583,5 +610,30 @@ const deleteLog = (id) => {
   color: var(--text-muted);
   font-size: 0.85rem;
   padding: 24px;
+}
+
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.btn-outline-load-more {
+  width: 100%;
+  padding: 10px;
+  background: rgba(0, 91, 172, 0.1);
+  border: 1px dashed rgba(0, 210, 255, 0.4);
+  color: #38bdf8;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-load-more:hover {
+  background: rgba(0, 91, 172, 0.2);
+  border-color: #00d2ff;
+  color: #fff;
 }
 </style>

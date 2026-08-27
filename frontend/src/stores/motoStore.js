@@ -244,6 +244,30 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
+    // 精準獨立同步 1.5: 首頁儀表輕量摘要 (僅拉取前 3 筆最新紀錄，極速載入)
+    async syncDashboardSummary(force = false) {
+      if (!this.isAuthenticated) return
+      const now = Date.now()
+      if (!force && this._lastDashSync && now - this._lastDashSync < 3000) return
+      this._lastDashSync = now
+
+      try {
+        const [v, recentFuels, recentMaints] = await Promise.all([
+          api.getVehicle().catch(() => null),
+          api.getFuelLogs({ limit: 3 }).catch(() => null),
+          api.getMaintenanceLogs({ limit: 3 }).catch(() => null)
+        ])
+
+        if (v) this.vehicle = { ...this.vehicle, ...v }
+        if (Array.isArray(recentFuels)) this.fuelLogs = recentFuels
+        if (Array.isArray(recentMaints)) this.maintenanceLogs = recentMaints
+        this.isBackendOnline = true
+        this.persist()
+      } catch (err) {
+        console.warn('Sync dashboard summary failed:', err)
+      }
+    },
+
     // 精準獨立同步 2: 加油紀錄 (/api/fuel)
     async syncFuelLogs(force = false) {
       if (!this.isAuthenticated) return
