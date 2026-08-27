@@ -164,7 +164,7 @@ const sendQuery = async (text) => {
       ]
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: formattedContents,
         config: {
           systemInstruction: systemPrompt,
@@ -174,16 +174,16 @@ const sendQuery = async (text) => {
 
       responseText = response.text || (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) || ''
     } catch (sdkErr) {
-      console.warn('@google/genai 2.5 調用異常，嘗試 gemini-2.0-flash / 本地知識庫:', sdkErr)
+      console.warn('@google/genai 3.1-flash-lite 調用異常，嘗試 gemini-2.0-flash-lite / 本地知識庫:', sdkErr)
       try {
         const res = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.0-flash-lite',
           contents: q,
           config: { systemInstruction: systemPrompt }
         })
         responseText = res.text || ''
       } catch (fErr) {
-        console.warn('啟用本地 SUI 125 專家知識庫:', fErr)
+        console.warn('啟用本地專家知識庫:', fErr)
         responseText = getOfflineDiagnosis(q)
       }
     }

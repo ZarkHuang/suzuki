@@ -14,11 +14,11 @@ async def diagnose(req: schemas.AiDiagnosisRequest):
     # 支援後端 Gemini API Key 備援診斷
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     if gemini_key:
-        prompt_text = f"你是 Suzuki SUI 125 資深機車維修技師。車主描述問題：{req.query}。請給出專業排查建議。"
+        prompt_text = f"你是機車專業資深維修技師。車輛型號：{req.vehicle_model}，里程：{req.current_odo}km。車主描述問題：{req.query}。請給出條理分明、專業的排查處置建議。"
         payload = {
             "contents": [{"parts": [{"text": prompt_text}]}]
         }
-        for m in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]:
+        for m in ["gemini-3.1-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={gemini_key}"
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -29,7 +29,7 @@ async def diagnose(req: schemas.AiDiagnosisRequest):
                         return schemas.AiDiagnosisResponse(
                             diagnosis=text_resp,
                             urgency="正常保養排查",
-                            suggested_actions=["對照 SUI 125 保養手冊規範", "檢查機油量與耗材損耗", "必要時至授權經銷檢測"]
+                            suggested_actions=["對照原廠保養規範", "檢查機油量與耗材損耗", "必要時至授權經銷檢測"]
                         )
             except Exception:
                 pass
