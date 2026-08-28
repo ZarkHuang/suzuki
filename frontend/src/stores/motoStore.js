@@ -107,36 +107,68 @@ export const useMotoStore = defineStore('moto', {
       const current = Number(state.vehicle?.currentOdo || 0)
       const sorted = [...state.schedules].sort((a, b) => a.mileage - b.mileage)
       
+      let prevKm = 0
       for (const schedule of sorted) {
         const isDone = state.maintenanceLogs.some(log => Math.abs(log.odometer - schedule.mileage) <= 150)
         if (!isDone && schedule.mileage >= current) {
-          const remainingKm = schedule.mileage - current
+          const remainingKm = Math.max(0, schedule.mileage - current)
           const isUrgent = remainingKm <= state.settings.notifyAdvanceKm
+          const interval = Math.max(100, schedule.mileage - prevKm)
+          const progressPercent = Math.min(100, Math.max(0, Math.round(((current - prevKm) / interval) * 100)))
           return {
             ...schedule,
             remainingKm,
             isUrgent,
-            progressPercent: Math.min(100, Math.max(0, ((current - (schedule.mileage - 1000)) / 1000) * 100))
+            targetKm: schedule.mileage,
+            prevKm,
+            interval,
+            progressPercent
           }
         }
+        prevKm = schedule.mileage
       }
 
       const nextKm = Math.ceil((current + 1) / 1000) * 1000
+      const prevKmOverflow = Math.max(0, nextKm - 1000)
+      const remainingKm = Math.max(0, nextKm - current)
       return {
         mileage: nextKm,
         title: `${nextKm.toLocaleString()} km 定期保養`,
         items: [{ name: '機油更換與安全檢查', required: true }],
-        remainingKm: nextKm - current,
-        isUrgent: (nextKm - current) <= state.settings.notifyAdvanceKm,
-        progressPercent: 50
+        remainingKm,
+        isUrgent: remainingKm <= state.settings.notifyAdvanceKm,
+        targetKm: nextKm,
+        prevKm: prevKmOverflow,
+        interval: 1000,
+        progressPercent: Math.min(100, Math.max(0, Math.round(((current - prevKmOverflow) / 1000) * 100)))
       }
     },
 
     partsStatusList: (state) => {
       const current = Number(state.vehicle?.currentOdo || 0)
+      const partKeywords = {
+        '機油': ['機油', 'oil', '原廠機油'],
+        '齒輪油': ['齒輪油', 'gear'],
+        '空氣濾清器': ['空濾', '空氣濾清器', '濾清器', '濾芯', 'air filter'],
+        '火星塞': ['火星塞', 'spark'],
+        '傳動皮帶': ['皮帶', '傳動', 'belt'],
+        '前煞車來令片': ['煞車皮', '來令', '煞車片', '制動', 'brake'],
+        '煞車油': ['煞車油', 'brake fluid', 'dot 4', 'dot4'],
+        '輪胎': ['輪胎', '輪圈', '前後輪', 'tire']
+      }
+
       return PARTS_LIFECYCLE_GUIDE.map(part => {
+        const baseKey = Object.keys(partKeywords).find(k => part.name.includes(k)) || part.name.split(' ')[0]
+        const keywords = partKeywords[baseKey] || [baseKey]
+
         const lastMaint = state.maintenanceLogs
-          .filter(l => l.items && l.items.some(i => (typeof i === 'string' ? i : i.name).includes(part.name.split(' ')[0])))
+          .filter(l => {
+            if (!l.items) return false
+            return l.items.some(i => {
+              const text = (typeof i === 'string' ? i : (i.name || '')).toLowerCase()
+              return keywords.some(kw => text.includes(kw.toLowerCase()))
+            })
+          })
           .sort((a, b) => b.odometer - a.odometer)[0]
         
         const lastReplacedKm = lastMaint ? lastMaint.odometer : 0

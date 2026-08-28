@@ -42,9 +42,7 @@ const recentFuel = computed(() => store.fuelLogs[0] || null)
 // 計算距離下次保養的進度百分比 (0~100)
 const maintProgress = computed(() => {
   if (!nextMaint.value) return 0
-  const rem = nextMaint.value.remainingKm
-  if (rem <= 0) return 100
-  return Math.max(10, Math.min(100, Math.round(((1000 - rem) / 1000) * 100)))
+  return nextMaint.value.progressPercent ?? 0
 })
 </script>
 
