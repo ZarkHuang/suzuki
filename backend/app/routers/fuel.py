@@ -11,10 +11,11 @@ router = APIRouter(prefix="/api/fuel", tags=["Fuel 加油與油耗紀錄"])
 
 @router.get("", response_model=schemas.PaginatedFuelLogResponse)
 def get_fuel_logs(
-    page: int = 1,
-    page_size: int = 100,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
+    all_data: bool = False,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
@@ -22,13 +23,27 @@ def get_fuel_logs(
         base_query = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id)
         data_total = base_query.count()
 
-        # 若有傳入 limit，以 limit 為單頁筆數
-        actual_page_size = limit if (limit is not None and limit > 0) else (page_size if page_size > 0 else 10)
-        actual_page = page if page > 0 else 1
+        # 方案 A：若未主動指定分頁參數，或傳入 all_data=True，預設全量撈取該用戶歷史紀錄（永不截斷）
+        is_paginated_request = (page is not None or page_size is not None or limit is not None or offset is not None) and not all_data
+
+        if not is_paginated_request:
+            logs = base_query.order_by(models.FuelLog.odometer.desc()).limit(3000).all()
+            return {
+                "list": logs,
+                "pagination": {
+                    "page": 1,
+                    "page_size": len(logs) if len(logs) > 0 else 1,
+                    "page_total": 1,
+                    "data_total": data_total
+                }
+            }
+
+        actual_page = page if (page is not None and page > 0) else 1
+        actual_page_size = limit if (limit is not None and limit > 0) else (page_size if (page_size is not None and page_size > 0) else 50)
         actual_offset = offset if (offset is not None and offset >= 0) else ((actual_page - 1) * actual_page_size)
 
         logs = base_query.order_by(models.FuelLog.odometer.desc()).offset(actual_offset).limit(actual_page_size).all()
-        page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else (1 if data_total == 0 else 1)
+        page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else 1
 
         return {
             "list": logs,
@@ -46,7 +61,7 @@ def get_fuel_logs(
             "list": [],
             "pagination": {
                 "page": 1,
-                "page_size": 10,
+                "page_size": 1,
                 "page_total": 0,
                 "data_total": 0
             }
@@ -87,7 +102,12 @@ def delete_fuel_log(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
-    query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id, models.FuelLog.user_id == user.id)
+    try:
+        f_id = int(log_id)
+        query = db.query(models.FuelLog).filter(models.FuelLog.id == f_id, models.FuelLog.user_id == user.id)
+    except ValueError:
+        query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id, models.FuelLog.user_id == user.id)
+
     log = query.first()
     if not log:
         raise HTTPException(status_code=404, detail="紀錄未找到")
