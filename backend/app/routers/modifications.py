@@ -6,7 +6,7 @@ import os
 import uuid
 
 from .. import models, schemas, auth
-from ..database import get_db
+from ..database import get_db, safe_commit_with_auto_id
 
 router = APIRouter(prefix="/api/modifications", tags=["Modifications 改裝日誌"])
 
@@ -16,7 +16,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.get("", response_model=schemas.PaginatedModificationResponse)
 def get_modifications(
     page: int = 1,
-    page_size: int = 10,
+    page_size: int = 100,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -75,15 +75,12 @@ def create_modification(
         note=mod_in.note or "",
         image_url=mod_in.image_url or ""
     )
-    db.add(db_mod)
-
     # 同步更新車輛里程
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if vehicle and mod_in.odometer > (vehicle.current_odo or 0):
         vehicle.current_odo = mod_in.odometer
 
-    db.commit()
-    db.refresh(db_mod)
+    safe_commit_with_auto_id(db, db_mod, models.Modification)
     return db_mod
 
 @router.delete("/{mod_id}")

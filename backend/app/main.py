@@ -1,11 +1,12 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from . import models
-from .database import engine
+from .database import engine, get_db
 from .routers import auth, vehicle, fuel, maintenance, modifications, ai
 
 # 自動建立資料表與確保全部欄位存在 (採用 PyMySQL 原生連線，100% 相容 TiDB Cloud Serverless)
@@ -223,3 +224,26 @@ def trigger_migrate():
         "message": "資料庫欄位已全面自動補齊並完成驗證！",
         "details": details
     }
+
+@app.get("/api/system/db-status")
+def db_status(db: Session = Depends(get_db)):
+    try:
+        db_name = db.execute(text("SELECT DATABASE()")).scalar()
+        db_user = db.execute(text("SELECT USER()")).scalar()
+        mod_count = db.execute(text("SELECT COUNT(*) FROM modification_logs")).scalar()
+        mod_max_id = db.execute(text("SELECT COALESCE(MAX(CAST(id AS SIGNED)), 0) FROM modification_logs")).scalar()
+        recent = db.execute(text("SELECT id, user_id, title, date, created_at FROM modification_logs ORDER BY CAST(id AS SIGNED) DESC LIMIT 5")).fetchall()
+        recent_list = [
+            {"id": r[0], "user_id": r[1], "title": r[2], "date": r[3], "created_at": str(r[4])}
+            for r in recent
+        ]
+        return {
+            "status": "success",
+            "current_database": db_name,
+            "connected_user": db_user,
+            "total_modifications": mod_count,
+            "max_id": mod_max_id,
+            "recent_records": recent_list
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

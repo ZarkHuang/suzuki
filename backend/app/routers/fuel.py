@@ -5,14 +5,14 @@ from typing import List, Optional
 import uuid
 
 from .. import models, schemas, auth
-from ..database import get_db
+from ..database import get_db, safe_commit_with_auto_id
 
 router = APIRouter(prefix="/api/fuel", tags=["Fuel 加油與油耗紀錄"])
 
 @router.get("", response_model=schemas.PaginatedFuelLogResponse)
 def get_fuel_logs(
     page: int = 1,
-    page_size: int = 10,
+    page_size: int = 100,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -73,15 +73,12 @@ def create_fuel_log(
         is_full=1 if log_in.full_tank else 0,
         note=log_in.note or ""
     )
-    db.add(db_log)
-
     # 同步更新車輛里程
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if vehicle and log_in.odometer > (vehicle.current_odo or 0):
         vehicle.current_odo = log_in.odometer
 
-    db.commit()
-    db.refresh(db_log)
+    safe_commit_with_auto_id(db, db_log, models.FuelLog)
     return db_log
 
 @router.delete("/{log_id}")

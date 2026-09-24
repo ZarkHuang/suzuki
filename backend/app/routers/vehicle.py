@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from .. import models, schemas, auth
-from ..database import get_db
+from ..database import get_db, safe_commit_with_auto_id
 
 router = APIRouter(prefix="/api/vehicle", tags=["Vehicle 儀表與車輛設定"])
 
@@ -26,9 +26,7 @@ def get_vehicle(
                 tank_capacity=5.5,
                 fuel_type="92"
             )
-            db.add(vehicle)
-            db.commit()
-            db.refresh(vehicle)
+            safe_commit_with_auto_id(db, vehicle, models.Vehicle)
         return vehicle
     except Exception as e:
         db.rollback()

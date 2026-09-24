@@ -6,14 +6,14 @@ import uuid
 import json
 
 from .. import models, schemas, auth
-from ..database import get_db
+from ..database import get_db, safe_commit_with_auto_id
 
 router = APIRouter(prefix="/api/maintenance", tags=["Maintenance 保養日誌"])
 
 @router.get("", response_model=schemas.PaginatedMaintenanceLogResponse)
 def get_maintenance_logs(
     page: int = 1,
-    page_size: int = 10,
+    page_size: int = 100,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -72,14 +72,11 @@ def create_maintenance_log(
         note=log_in.note or "",
         invoice_image_url=log_in.invoice_image_url or ""
     )
-    db.add(db_log)
-
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
     if vehicle and log_in.odometer > (vehicle.current_odo or 0):
         vehicle.current_odo = log_in.odometer
 
-    db.commit()
-    db.refresh(db_log)
+    safe_commit_with_auto_id(db, db_log, models.MaintenanceLog)
     return db_log
 
 @router.delete("/{log_id}")
