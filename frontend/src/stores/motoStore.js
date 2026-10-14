@@ -128,19 +128,19 @@ export const useMotoStore = defineStore('moto', {
         prevKm = schedule.mileage
       }
 
-      const nextKm = Math.ceil((current + 1) / 1000) * 1000
-      const prevKmOverflow = Math.max(0, nextKm - 1000)
+      const nextKm = Math.ceil((current + 1) / 2000) * 2000
+      const prevKmOverflow = Math.max(0, nextKm - 2000)
       const remainingKm = Math.max(0, nextKm - current)
       return {
         mileage: nextKm,
         title: `${nextKm.toLocaleString()} km 定期保養`,
-        items: [{ name: '機油更換與安全檢查', required: true }],
+        items: [{ name: '原廠機油更換與日常安全檢查', required: true }],
         remainingKm,
         isUrgent: remainingKm <= state.settings.notifyAdvanceKm,
         targetKm: nextKm,
         prevKm: prevKmOverflow,
-        interval: 1000,
-        progressPercent: Math.min(100, Math.max(0, Math.round(((current - prevKmOverflow) / 1000) * 100)))
+        interval: 2000,
+        progressPercent: Math.min(100, Math.max(0, Math.round(((current - prevKmOverflow) / 2000) * 100)))
       }
     },
 
@@ -150,9 +150,11 @@ export const useMotoStore = defineStore('moto', {
         '機油': ['機油', 'oil', '原廠機油'],
         '齒輪油': ['齒輪油', 'gear'],
         '空氣濾清器': ['空濾', '空氣濾清器', '濾清器', '濾芯', 'air filter'],
-        '火星塞': ['火星塞', 'spark'],
+        '火星塞': ['火星塞', 'spark', 'cpr7ea'],
+        '冷卻風扇濾棉': ['風扇濾棉', '導風蓋', '冷導風', '冷卻濾棉', '海綿', 'filter'],
         '傳動皮帶': ['皮帶', '傳動', 'belt'],
-        '前煞車來令片': ['煞車皮', '來令', '煞車片', '制動', 'brake'],
+        '前煞車來令片': ['前煞車', '卡鉗', '來令', '煞車片', '制動', '碟煞'],
+        '後煞車鼓皮': ['後煞車', '鼓煞', '煞車皮', '蹄片'],
         '煞車油': ['煞車油', 'brake fluid', 'dot 4', 'dot4'],
         '輪胎': ['輪胎', '輪圈', '前後輪', 'tire']
       }

@@ -102,7 +102,7 @@ const deleteLog = (id) => {
     <div v-if="activeTab === 'schedule'" class="schedule-tab-content">
       <div class="info-banner">
         <Info :size="16" class="icon-blue" />
-        <span>SUI 125 原廠建議首保 300km，其後每 1,000~4,000km 定期點檢。</span>
+        <span>Suzuki SUI 125 原廠規範：新車首保 500km，其後機油每 2,000km、齒輪油每 4,000km、重要耗材每 8,000 / 16,000km 定期更換。</span>
       </div>
 
       <div class="schedule-list">

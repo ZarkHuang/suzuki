@@ -112,7 +112,7 @@ const save = () => {
           <span class="template-label">SUI 125 官方原廠里程快捷套用：</span>
           <div class="template-chips">
             <button 
-              v-for="s in store.schedules.slice(0, 5)" 
+              v-for="s in store.schedules.slice(0, 6)" 
               :key="s.mileage" 
               class="btn-chip"
               @click="applyOfficialTemplate(s)"
