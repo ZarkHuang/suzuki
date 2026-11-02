@@ -1,63 +1,102 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useMotoStore } from '../stores/motoStore'
+import { compressImageFile } from '../services/api'
 import { MOD_CATEGORIES } from '../constants/sui125'
-import { X, Sparkles, Check, Camera, Star } from 'lucide-vue-next'
+import { X, Sparkles, Check, Camera, Star, Calendar } from 'lucide-vue-next'
 import confetti from 'canvas-confetti'
+
+const props = defineProps({
+  editMod: {
+    type: Object,
+    default: null
+  }
+})
 
 const emit = defineEmits(['close', 'saved'])
 const store = useMotoStore()
 
-const title = ref('')
-const category = ref('exterior')
-const cost = ref('')
-const boughtFrom = ref('')
-const odometer = ref(store.currentOdometer)
-const date = ref(new Date().toISOString().split('T')[0])
-const rating = ref(5)
-const note = ref('')
-const imageUrl = ref('')
+const isEditMode = computed(() => !!props.editMod)
+const isSaving = ref(false)
 
-const handleImageUpload = (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  if (file.size > 5 * 1024 * 1024) {
-    alert('照片請小於 5MB')
-    return
-  }
-  const reader = new FileReader()
-  reader.onload = (event) => {
-    imageUrl.value = event.target.result
-  }
-  reader.readAsDataURL(file)
+const toLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const getTodayStr = () => toLocalDateStr(new Date())
+const getYesterdayStr = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return toLocalDateStr(d)
 }
 
-const save = () => {
+const title = ref(props.editMod?.title || '')
+const category = ref(props.editMod?.category || 'exterior')
+const cost = ref(props.editMod ? props.editMod.cost : '')
+const boughtFrom = ref(props.editMod?.boughtFrom || '')
+const odometer = ref(props.editMod ? props.editMod.odometer : store.currentOdometer)
+const date = ref(props.editMod?.date || getTodayStr())
+const rating = ref(props.editMod?.rating || 5)
+const note = ref(props.editMod?.note || '')
+const imageUrl = ref(props.editMod?.imageUrl || '')
+
+const setDateToday = () => { date.value = getTodayStr() }
+const setDateYesterday = () => { date.value = getYesterdayStr() }
+
+const handleImageUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  if (file.size > 10 * 1024 * 1024) {
+    alert('照片請小於 10MB')
+    return
+  }
+  try {
+    imageUrl.value = await compressImageFile(file)
+  } catch (err) {
+    console.error('圖片壓縮失敗:', err)
+  }
+}
+
+const save = async () => {
+  if (isSaving.value) return
   if (!title.value.trim()) {
     alert('請填寫改裝品項名稱')
     return
   }
 
-  const mod = store.addModification({
-    title: title.value.trim(),
-    category: category.value,
-    cost: Number(cost.value) || 0,
-    boughtFrom: boughtFrom.value,
-    odometer: Number(odometer.value) || store.currentOdometer,
-    date: date.value,
-    rating: rating.value,
-    note: note.value,
-    imageUrl: imageUrl.value
-  })
+  isSaving.value = true
+  try {
+    const payload = {
+      title: title.value.trim(),
+      category: category.value,
+      cost: Number(cost.value) || 0,
+      boughtFrom: boughtFrom.value,
+      odometer: Number(odometer.value) || store.currentOdometer,
+      date: date.value || getTodayStr(),
+      rating: rating.value,
+      note: note.value,
+      imageUrl: imageUrl.value
+    }
 
-  confetti({
-    particleCount: 50,
-    spread: 60,
-    origin: { y: 0.7 }
-  })
+    let mod = null
+    if (isEditMode.value && props.editMod?.id) {
+      mod = await store.updateModification(props.editMod.id, payload)
+    } else {
+      mod = await store.addModification(payload)
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.7 }
+      })
+    }
 
-  emit('saved', mod)
-  emit('close')
+    emit('saved', mod)
+    emit('close')
+  } finally {
+    isSaving.value = false
+  }
 }
 </script>
 
@@ -67,9 +106,9 @@ const save = () => {
       <div class="modal-header">
         <div class="title-with-icon">
           <Sparkles :size="20" class="icon-amber" />
-          <h3>記錄改裝品項</h3>
+          <h3>{{ isEditMode ? '編輯改裝品項' : '記錄改裝品項' }}</h3>
         </div>
-        <button class="btn-close" @click="emit('close')">
+        <button type="button" class="btn-close" @click="emit('close')">
           <X :size="20" />
         </button>
       </div>
@@ -80,8 +119,20 @@ const save = () => {
           <input v-model="title" type="text" class="form-input text-highlight" placeholder="例如：SUI 專用日系不鏽鋼後貨架" autofocus />
         </div>
 
-        <div class="form-row">
-          <div class="form-group flex-1">
+        <!-- 安裝日期 (獨立全寬列) -->
+        <div class="form-group">
+          <div class="label-with-actions">
+            <label class="form-label"><Calendar :size="14" /> 安裝日期</label>
+            <div class="date-quick-btns">
+              <button type="button" class="btn-quick-date" :class="{ active: date === getTodayStr() }" @click="setDateToday">今天</button>
+              <button type="button" class="btn-quick-date" :class="{ active: date === getYesterdayStr() }" @click="setDateYesterday">昨天</button>
+            </div>
+          </div>
+          <input v-model="date" type="date" class="form-input date-input" />
+        </div>
+
+        <div class="form-row-two">
+          <div class="form-group">
             <label class="form-label">分類類別</label>
             <select v-model="category" class="form-select">
               <option v-for="cat in MOD_CATEGORIES" :key="cat.id" :value="cat.id">
@@ -89,20 +140,20 @@ const save = () => {
               </option>
             </select>
           </div>
-          <div class="form-group flex-1">
+          <div class="form-group">
             <label class="form-label">購入金額 (NT$)</label>
-            <input v-model="cost" type="number" class="form-input" placeholder="如 1800" />
+            <input v-model="cost" type="number" inputmode="numeric" class="form-input" placeholder="如 1800" />
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group flex-1">
+        <div class="form-row-two">
+          <div class="form-group">
             <label class="form-label">購買處 / 通路</label>
             <input v-model="boughtFrom" type="text" class="form-input" placeholder="例如：蝦皮 / 實體改裝店" />
           </div>
-          <div class="form-group flex-1">
+          <div class="form-group">
             <label class="form-label">安裝時里程 (KM)</label>
-            <input v-model="odometer" type="number" class="form-input" placeholder="如 350" />
+            <input v-model="odometer" type="number" inputmode="numeric" class="form-input" placeholder="如 350" />
           </div>
         </div>
 
@@ -135,7 +186,7 @@ const save = () => {
             </label>
             <div v-if="imageUrl" class="image-preview">
               <img :src="imageUrl" alt="改裝照片預覽" />
-              <button class="btn-remove-img" @click="imageUrl = ''">移除</button>
+              <button type="button" class="btn-remove-img" @click="imageUrl = ''">移除</button>
             </div>
           </div>
         </div>
@@ -147,9 +198,9 @@ const save = () => {
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="emit('close')">取消</button>
-        <button class="btn btn-primary" @click="save">
-          <Check :size="18" /> 儲存改裝日誌
+        <button type="button" class="btn btn-secondary" @click="emit('close')">取消</button>
+        <button type="button" class="btn btn-primary" :disabled="isSaving" @click="save">
+          <Check :size="18" /> {{ isSaving ? '儲存中...' : (isEditMode ? '儲存修改' : '儲存改裝日誌') }}
         </button>
       </div>
     </div>
@@ -188,13 +239,65 @@ const save = () => {
   padding: 4px;
 }
 
-.form-row {
+.label-with-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.label-with-actions .form-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 0;
+}
+
+.date-quick-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-quick-date {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-quick-date.active,
+.btn-quick-date:hover {
+  background: #005BAC;
+  color: #fff;
+  border-color: #38bdf8;
+}
+
+.date-input {
+  color-scheme: dark;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: block;
+}
+
+.form-row-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
-.flex-1 {
-  flex: 1;
+@media (max-width: 360px) {
+  .form-row-two {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 
 .text-highlight {
@@ -288,5 +391,9 @@ const save = () => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 10px;
+}
+
+.modal-footer .btn {
+  white-space: nowrap;
 }
 </style>

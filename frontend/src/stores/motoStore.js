@@ -7,6 +7,47 @@ const AUTH_STORAGE_KEY = 'suzuki_sui_motolog_auth'
 
 const getStorageKey = (userId) => userId ? `${STORAGE_KEY_PREFIX}${userId}` : 'suzuki_sui_motolog_guest'
 
+const OFFICIAL_MILEAGES = OFFICIAL_MAINTENANCE_SCHEDULE.map(s => Number(s.mileage))
+
+export const getExplicitScheduleMileageFromTitle = (title) => {
+  if (!title) return null
+  const cleanTitle = String(title).replace(/,/g, '')
+  for (const km of OFFICIAL_MILEAGES) {
+    const regex = new RegExp(`(^|\\D)${km}\\s*km`, 'i')
+    if (regex.test(cleanTitle)) return km
+  }
+  return null
+}
+
+// 智慧比對特定官方排程是否已有對應的保養紀錄
+export const matchLogToSchedule = (schedule, maintenanceLogs = []) => {
+  if (!schedule || !Array.isArray(maintenanceLogs) || maintenanceLogs.length === 0) return null
+  const targetKm = Number(schedule.mileage)
+
+  // 1. 優先比對紀錄是否有明確指定 scheduleMileage 或標題包含該官方排程里程
+  const explicitMatch = maintenanceLogs.find(log => {
+    if (log.scheduleMileage && Number(log.scheduleMileage) === targetKm) return true
+    return getExplicitScheduleMileageFromTitle(log.title) === targetKm
+  })
+  if (explicitMatch) return explicitMatch
+
+  // 2. 里程區間容差比對 (500km 首保容許 50~1250km；2000km 以上定保容許 ±600km)
+  const minKm = targetKm === 500 ? 50 : targetKm - 600
+  const maxKm = targetKm === 500 ? 1250 : targetKm + 600
+
+  const odoMatches = maintenanceLogs
+    .filter(log => {
+      if (log.scheduleMileage && Number(log.scheduleMileage) !== targetKm) return false
+      const explicitKm = getExplicitScheduleMileageFromTitle(log.title)
+      if (explicitKm && explicitKm !== targetKm) return false
+      const odo = Number(log.odometer)
+      return odo >= minKm && odo <= maxKm
+    })
+    .sort((a, b) => Math.abs(Number(a.odometer) - targetKm) - Math.abs(Number(b.odometer) - targetKm))
+
+  return odoMatches[0] || null
+}
+
 export const useMotoStore = defineStore('moto', {
   state: () => {
     let authData = null
@@ -103,14 +144,15 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    nextMaintenance: (state) => {
-      const current = Number(state.vehicle?.currentOdo || 0)
+    nextMaintenance(state) {
+      const current = this.currentOdometer
       const sorted = [...state.schedules].sort((a, b) => a.mileage - b.mileage)
       
       let prevKm = 0
       for (const schedule of sorted) {
-        const isDone = state.maintenanceLogs.some(log => Math.abs(log.odometer - schedule.mileage) <= 150)
-        if (!isDone && schedule.mileage >= current) {
+        const matchedLog = matchLogToSchedule(schedule, state.maintenanceLogs)
+        const isDone = !!matchedLog
+        if (!isDone && schedule.mileage >= current - 300) {
           const remainingKm = Math.max(0, schedule.mileage - current)
           const isUrgent = remainingKm <= state.settings.notifyAdvanceKm
           const interval = Math.max(100, schedule.mileage - prevKm)
@@ -144,8 +186,8 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    partsStatusList: (state) => {
-      const current = Number(state.vehicle?.currentOdo || 0)
+    partsStatusList(state) {
+      const current = this.currentOdometer
       const partKeywords = {
         '機油': ['機油', 'oil', '原廠機油'],
         '齒輪油': ['齒輪油', 'gear'],
@@ -281,23 +323,85 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // 精準獨立同步 1.5: 首頁儀表輕量摘要 (僅拉取前 3 筆最新紀錄，極速載入)
+    // 查詢某個官方排程里程對應的已完成保養紀錄
+    getScheduleCompletedLog(mileage) {
+      const schedule = this.schedules.find(s => Number(s.mileage) === Number(mileage)) || { mileage: Number(mileage) }
+      return matchLogToSchedule(schedule, this.maintenanceLogs)
+    },
+
+    // 安全合併雲端加油紀錄與本地尚未同步完成的紀錄
+    _mergeRemoteFuelLogs(remoteLogs) {
+      if (!Array.isArray(remoteLogs)) return
+      const pendingLocal = this.fuelLogs.filter(l => String(l.id).startsWith('fuel-'))
+      const merged = [...remoteLogs]
+      for (const local of pendingLocal) {
+        const alreadyExists = merged.some(
+          r => Number(r.odometer) === Number(local.odometer) && r.date === local.date && Number(r.liters) === Number(local.liters)
+        )
+        if (!alreadyExists) {
+          merged.push(local)
+        }
+      }
+      merged.sort((a, b) => Number(b.odometer) - Number(a.odometer))
+      this.fuelLogs = merged
+    },
+
+    // 安全合併雲端保養紀錄與本地尚未同步完成的紀錄，避免切換頁籤時被覆蓋消失
+    _mergeRemoteMaintenanceLogs(remoteLogs) {
+      if (!Array.isArray(remoteLogs)) return
+      const pendingLocal = this.maintenanceLogs.filter(l => String(l.id).startsWith('maint-'))
+      const merged = [...remoteLogs]
+      for (const local of pendingLocal) {
+        const alreadyExists = merged.some(
+          r => Number(r.odometer) === Number(local.odometer) && r.date === local.date && r.title === local.title
+        )
+        if (!alreadyExists) {
+          merged.push(local)
+        }
+      }
+      merged.sort((a, b) => Number(b.odometer) - Number(a.odometer))
+      this.maintenanceLogs = merged
+    },
+
+    // 安全合併雲端改裝紀錄與本地尚未同步完成的紀錄
+    _mergeRemoteModifications(remoteLogs) {
+      if (!Array.isArray(remoteLogs)) return
+      const pendingLocal = this.modifications.filter(m => String(m.id).startsWith('mod-'))
+      const merged = [...remoteLogs]
+      for (const local of pendingLocal) {
+        const alreadyExists = merged.some(
+          r => r.title === local.title && r.date === local.date && Number(r.cost) === Number(local.cost)
+        )
+        if (!alreadyExists) {
+          merged.push(local)
+        }
+      }
+      this.modifications = merged
+    },
+
+    // 精準獨立同步 1.5: 首頁儀表摘要
     async syncDashboardSummary(force = false) {
       if (!this.isAuthenticated) return
       const now = Date.now()
       if (!force && this._lastDashSync && now - this._lastDashSync < 3000) return
       this._lastDashSync = now
 
+      await Promise.all([
+        this._lastFuelWritePromise?.catch(() => {}),
+        this._lastMaintWritePromise?.catch(() => {}),
+        this._lastModWritePromise?.catch(() => {})
+      ])
+
       try {
         const [v, recentFuels, recentMaints] = await Promise.all([
           api.getVehicle().catch(() => null),
-          api.getFuelLogs({ limit: 3 }).catch(() => null),
-          api.getMaintenanceLogs({ limit: 3 }).catch(() => null)
+          api.getFuelLogs().catch(() => null),
+          api.getMaintenanceLogs().catch(() => null)
         ])
 
         if (v) this.vehicle = { ...this.vehicle, ...v }
-        if (Array.isArray(recentFuels)) this.fuelLogs = recentFuels
-        if (Array.isArray(recentMaints)) this.maintenanceLogs = recentMaints
+        if (Array.isArray(recentFuels)) this._mergeRemoteFuelLogs(recentFuels)
+        if (Array.isArray(recentMaints)) this._mergeRemoteMaintenanceLogs(recentMaints)
         this.isBackendOnline = true
         this.persist()
       } catch (err) {
@@ -312,10 +416,14 @@ export const useMotoStore = defineStore('moto', {
       if (!force && this._lastFuelSync && now - this._lastFuelSync < 2000) return
       this._lastFuelSync = now
 
+      if (this._lastFuelWritePromise) {
+        await this._lastFuelWritePromise.catch(() => {})
+      }
+
       try {
         const fuels = await api.getFuelLogs()
         if (Array.isArray(fuels)) {
-          this.fuelLogs = fuels
+          this._mergeRemoteFuelLogs(fuels)
           this.isBackendOnline = true
           this.persist()
         }
@@ -331,10 +439,14 @@ export const useMotoStore = defineStore('moto', {
       if (!force && this._lastMaintSync && now - this._lastMaintSync < 2000) return
       this._lastMaintSync = now
 
+      if (this._lastMaintWritePromise) {
+        await this._lastMaintWritePromise.catch(() => {})
+      }
+
       try {
         const maints = await api.getMaintenanceLogs()
         if (Array.isArray(maints)) {
-          this.maintenanceLogs = maints
+          this._mergeRemoteMaintenanceLogs(maints)
           this.isBackendOnline = true
           this.persist()
         }
@@ -350,10 +462,14 @@ export const useMotoStore = defineStore('moto', {
       if (!force && this._lastModSync && now - this._lastModSync < 2000) return
       this._lastModSync = now
 
+      if (this._lastModWritePromise) {
+        await this._lastModWritePromise.catch(() => {})
+      }
+
       try {
         const mods = await api.getModifications()
         if (Array.isArray(mods)) {
-          this.modifications = mods
+          this._mergeRemoteModifications(mods)
           this.isBackendOnline = true
           this.persist()
         }
@@ -382,9 +498,9 @@ export const useMotoStore = defineStore('moto', {
           ])
 
           if (v) this.vehicle = { ...this.vehicle, ...v }
-          if (Array.isArray(fuels)) this.fuelLogs = fuels
-          if (Array.isArray(maints)) this.maintenanceLogs = maints
-          if (Array.isArray(mods)) this.modifications = mods
+          if (Array.isArray(fuels)) this._mergeRemoteFuelLogs(fuels)
+          if (Array.isArray(maints)) this._mergeRemoteMaintenanceLogs(maints)
+          if (Array.isArray(mods)) this._mergeRemoteModifications(mods)
           console.log(`✅ 已完成雲端同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
         } else if (!this.isAuthenticated) {
           // 未登入訪客模式保持純淨空狀態
@@ -400,19 +516,31 @@ export const useMotoStore = defineStore('moto', {
     },
 
     persist() {
+      if (!this.isAuthenticated || !this.currentUser?.id) return
+      const key = getStorageKey(this.currentUser.id)
       try {
-        if (this.isAuthenticated && this.currentUser?.id) {
-          const key = getStorageKey(this.currentUser.id)
+        localStorage.setItem(key, JSON.stringify({
+          vehicle: this.vehicle,
+          fuelLogs: this.fuelLogs,
+          maintenanceLogs: this.maintenanceLogs,
+          modifications: this.modifications,
+          settings: this.settings
+        }))
+      } catch (e) {
+        // 當超過 10 筆以上含大圖資料觸發瀏覽器 5MB LocalStorage 上限時，自動為本地快取瘦身（雲端仍保留完整原圖），確保結構化紀錄 100% 寫入不中斷
+        try {
+          const slimMaints = this.maintenanceLogs.map((m, i) => i < 5 ? m : { ...m, receiptImage: '' })
+          const slimMods = this.modifications.map((m, i) => i < 5 ? m : { ...m, imageUrl: '' })
           localStorage.setItem(key, JSON.stringify({
             vehicle: this.vehicle,
             fuelLogs: this.fuelLogs,
-            maintenanceLogs: this.maintenanceLogs,
-            modifications: this.modifications,
+            maintenanceLogs: slimMaints,
+            modifications: slimMods,
             settings: this.settings
           }))
+        } catch (innerErr) {
+          console.error('Save to localStorage failed:', innerErr)
         }
-      } catch (e) {
-        console.error('Save to localStorage failed:', e)
       }
     },
 
@@ -482,35 +610,52 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
+    // 重新計算所有加油紀錄的行駛區間與油耗
+    _recalculateFuelLogs() {
+      const asc = [...this.fuelLogs].sort((a, b) => Number(a.odometer) - Number(b.odometer))
+      for (let i = 0; i < asc.length; i++) {
+        if (i === 0) {
+          asc[i].tripDistance = 0
+          asc[i].efficiency = 0
+        } else {
+          const dist = Math.max(0, Number(asc[i].odometer) - Number(asc[i - 1].odometer))
+          const liters = Number(asc[i].liters) || 0
+          asc[i].tripDistance = dist
+          asc[i].efficiency = dist > 0 && liters > 0 ? Number((dist / liters).toFixed(2)) : 0
+        }
+      }
+      this.fuelLogs = asc.sort((a, b) => Number(b.odometer) - Number(a.odometer))
+    },
+
     // 新增加油紀錄 (雙寫 LocalStorage + MySQL)
     async addFuelLog(log) {
       const odo = Number(log.odometer)
       const liters = Number(log.liters)
-      const cost = Number(log.totalCost) || (liters * Number(log.pricePerLiter || 30))
+      const cost = Number(log.totalCost) || Math.round(liters * Number(log.pricePerLiter || 30.2))
 
       let tripDistance = 0
       let efficiency = 0
 
       const prevLogs = this.fuelLogs
-        .filter(l => l.odometer < odo)
-        .sort((a, b) => b.odometer - a.odometer)
+        .filter(l => Number(l.odometer) < odo)
+        .sort((a, b) => Number(b.odometer) - Number(a.odometer))
       
       if (prevLogs.length > 0) {
-        tripDistance = odo - prevLogs[0].odometer
+        tripDistance = odo - Number(prevLogs[0].odometer)
         if (liters > 0) {
           efficiency = Number((tripDistance / liters).toFixed(2))
         }
       }
 
       const newLog = {
-        id: 'fuel-' + Date.now(),
+        id: 'fuel-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         date: log.date || new Date().toISOString().split('T')[0],
         odometer: odo,
         liters: liters,
-        pricePerLiter: Number(log.pricePerLiter) || (liters > 0 ? Number((cost / liters).toFixed(2)) : 30),
+        pricePerLiter: Number(log.pricePerLiter) || (liters > 0 ? Number((cost / liters).toFixed(2)) : 30.2),
         totalCost: cost,
         fuelType: log.fuelType || '92',
-        gasStation: log.gasStation || '中油',
+        gasStation: log.gasStation || '台灣中油',
         tripDistance,
         efficiency,
         fullTank: log.fullTank !== false,
@@ -518,31 +663,104 @@ export const useMotoStore = defineStore('moto', {
       }
 
       this.fuelLogs.unshift(newLog)
-      this.fuelLogs.sort((a, b) => b.odometer - a.odometer)
-      this.updateOdometer(odo)
-      this.persist()
+      this._recalculateFuelLogs()
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
 
       // 同步發送至後端寫入 MySQL 並綁定 MySQL 自動產生的 id
       if (this.isAuthenticated) {
-        try {
-          const res = await api.createFuelLog(newLog)
-          if (res && res.id) {
-            newLog.id = res.id
-            this.isBackendOnline = true
-            this.persist()
+        const writeTask = (async () => {
+          try {
+            const target = this.fuelLogs.find(l => l.id === newLog.id) || newLog
+            const res = await api.createFuelLog(target)
+            if (res && res.id) {
+              const idx = this.fuelLogs.findIndex(l => l.id === newLog.id)
+              if (idx !== -1) this.fuelLogs[idx].id = res.id
+              newLog.id = res.id
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Sync fuel to MySQL error:', e)
           }
-        } catch (e) {
-          console.error('Sync fuel to MySQL error:', e)
-        }
+        })()
+        this._lastFuelWritePromise = writeTask
+        await writeTask
       }
 
       return newLog
     },
 
+    // 編輯更新加油紀錄 (支援修改加油日期、里程、油量、金額、加油站等)
+    async updateFuelLog(id, updatedFields) {
+      const idx = this.fuelLogs.findIndex(l => String(l.id) === String(id))
+      if (idx === -1) return null
+
+      const existing = this.fuelLogs[idx]
+      const odo = Number(updatedFields.odometer ?? existing.odometer)
+      const liters = Number(updatedFields.liters ?? existing.liters)
+      const pricePerLiter = Number(updatedFields.pricePerLiter ?? existing.pricePerLiter) || 30.2
+      const totalCost = updatedFields.totalCost !== undefined
+        ? Number(updatedFields.totalCost)
+        : Math.round(liters * pricePerLiter)
+
+      const updatedLog = {
+        ...existing,
+        date: updatedFields.date || existing.date,
+        odometer: odo,
+        liters,
+        pricePerLiter,
+        totalCost,
+        fuelType: updatedFields.fuelType || existing.fuelType || '92',
+        gasStation: updatedFields.gasStation || existing.gasStation || '台灣中油',
+        fullTank: updatedFields.fullTank !== undefined ? updatedFields.fullTank : existing.fullTank,
+        note: updatedFields.note !== undefined ? updatedFields.note : existing.note
+      }
+
+      this.fuelLogs.splice(idx, 1, updatedLog)
+      this._recalculateFuelLogs()
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
+
+      const recalculatedTarget = this.fuelLogs.find(l => String(l.id) === String(id)) || updatedLog
+
+      if (this.isAuthenticated && !String(id).startsWith('fuel-')) {
+        const writeTask = (async () => {
+          try {
+            const res = await api.updateFuelLog(id, recalculatedTarget)
+            if (res && res.id) {
+              const currentIdx = this.fuelLogs.findIndex(l => String(l.id) === String(id))
+              if (currentIdx !== -1) {
+                this.fuelLogs[currentIdx] = {
+                  ...this.fuelLogs[currentIdx],
+                  id: res.id
+                }
+              }
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Update fuel to MySQL error:', e)
+          }
+        })()
+        this._lastFuelWritePromise = writeTask
+        await writeTask
+      }
+
+      return recalculatedTarget
+    },
+
     async deleteFuelLog(id) {
-      this.fuelLogs = this.fuelLogs.filter(l => l.id !== id)
+      this.fuelLogs = this.fuelLogs.filter(l => String(l.id) !== String(id))
+      this._recalculateFuelLogs()
       this.persist()
-      if (this.isAuthenticated) {
+      if (this.isAuthenticated && !String(id).startsWith('fuel-')) {
         try {
           await api.deleteFuelLog(id)
           this.isBackendOnline = true
@@ -560,6 +778,7 @@ export const useMotoStore = defineStore('moto', {
         date: log.date || new Date().toISOString().split('T')[0],
         odometer: odo,
         title: log.title || `${odo} km 保養`,
+        scheduleMileage: log.scheduleMileage ? Number(log.scheduleMileage) : getExplicitScheduleMileageFromTitle(log.title),
         shopName: log.shopName || log.shop || 'SUZUKI 經銷門市',
         cost: Number(log.cost) || 0,
         items: Array.isArray(log.items) ? log.items : [log.items].filter(Boolean),
@@ -569,30 +788,98 @@ export const useMotoStore = defineStore('moto', {
 
       this.maintenanceLogs.unshift(newLog)
       this.maintenanceLogs.sort((a, b) => b.odometer - a.odometer)
-      this.updateOdometer(odo)
-      this.persist()
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
 
       // 同步發送至後端寫入 MySQL 並綁定真實 id
       if (this.isAuthenticated) {
-        try {
-          const res = await api.createMaintenanceLog(newLog)
-          if (res && res.id) {
-            newLog.id = res.id
-            this.isBackendOnline = true
-            this.persist()
+        const writeTask = (async () => {
+          try {
+            const res = await api.createMaintenanceLog(newLog)
+            if (res && res.id) {
+              const target = this.maintenanceLogs.find(l => l.id === newLog.id)
+              if (target) target.id = res.id
+              newLog.id = res.id
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Sync maint to MySQL error:', e)
           }
-        } catch (e) {
-          console.error('Sync maint to MySQL error:', e)
-        }
+        })()
+        this._lastMaintWritePromise = writeTask
+        await writeTask
       }
 
       return newLog
     },
 
+    // 編輯更新保養紀錄 (支援修改保養日期、里程、標題、花費、項目等)
+    async updateMaintenanceLog(id, updatedFields) {
+      const idx = this.maintenanceLogs.findIndex(l => String(l.id) === String(id))
+      if (idx === -1) return null
+
+      const existing = this.maintenanceLogs[idx]
+      const odo = Number(updatedFields.odometer ?? existing.odometer)
+      const nextTitle = updatedFields.title || existing.title
+      const updatedLog = {
+        ...existing,
+        date: updatedFields.date || existing.date,
+        odometer: odo,
+        title: nextTitle,
+        scheduleMileage: updatedFields.scheduleMileage !== undefined
+          ? (updatedFields.scheduleMileage ? Number(updatedFields.scheduleMileage) : null)
+          : (getExplicitScheduleMileageFromTitle(nextTitle) || existing.scheduleMileage || null),
+        shopName: updatedFields.shopName ?? updatedFields.shop ?? existing.shopName,
+        cost: updatedFields.cost !== undefined ? (Number(updatedFields.cost) || 0) : existing.cost,
+        items: Array.isArray(updatedFields.items)
+          ? [...updatedFields.items]
+          : (updatedFields.items ? [updatedFields.items] : existing.items),
+        note: updatedFields.note !== undefined ? updatedFields.note : existing.note,
+        receiptImage: updatedFields.receiptImage !== undefined ? updatedFields.receiptImage : existing.receiptImage
+      }
+
+      this.maintenanceLogs.splice(idx, 1, updatedLog)
+      this.maintenanceLogs.sort((a, b) => Number(b.odometer) - Number(a.odometer))
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
+
+      if (this.isAuthenticated && !String(id).startsWith('maint-')) {
+        const writeTask = (async () => {
+          try {
+            const res = await api.updateMaintenanceLog(id, updatedLog)
+            if (res && res.id) {
+              const currentIdx = this.maintenanceLogs.findIndex(l => String(l.id) === String(id))
+              if (currentIdx !== -1) {
+                this.maintenanceLogs[currentIdx] = {
+                  ...updatedLog,
+                  id: res.id
+                }
+              }
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Update maint to MySQL error:', e)
+          }
+        })()
+        this._lastMaintWritePromise = writeTask
+        await writeTask
+      }
+
+      return updatedLog
+    },
+
     async deleteMaintenanceLog(id) {
-      this.maintenanceLogs = this.maintenanceLogs.filter(l => l.id !== id)
+      this.maintenanceLogs = this.maintenanceLogs.filter(l => String(l.id) !== String(id))
       this.persist()
-      if (this.isAuthenticated) {
+      if (this.isAuthenticated && !String(id).startsWith('maint-')) {
         try {
           await api.deleteMaintenanceLog(id)
           this.isBackendOnline = true
@@ -604,10 +891,11 @@ export const useMotoStore = defineStore('moto', {
 
     // 新增改裝紀錄 (雙寫 LocalStorage + MySQL)
     async addModification(mod) {
+      const odo = Number(mod.odometer) || this.currentOdometer
       const newMod = {
-        id: 'mod-' + Date.now(),
+        id: 'mod-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
         date: mod.date || new Date().toISOString().split('T')[0],
-        odometer: Number(mod.odometer) || this.currentOdometer,
+        odometer: odo,
         title: mod.title,
         category: mod.category || 'exterior',
         cost: Number(mod.cost) || 0,
@@ -619,29 +907,93 @@ export const useMotoStore = defineStore('moto', {
       }
 
       this.modifications.unshift(newMod)
-      this.persist()
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
 
       // 同步發送至後端寫入 MySQL 並綁定真實 id
       if (this.isAuthenticated) {
-        try {
-          const res = await api.createModification(newMod)
-          if (res && res.id) {
-            newMod.id = res.id
-            this.isBackendOnline = true
-            this.persist()
+        const writeTask = (async () => {
+          try {
+            const res = await api.createModification(newMod)
+            if (res && res.id) {
+              const target = this.modifications.find(m => m.id === newMod.id)
+              if (target) target.id = res.id
+              newMod.id = res.id
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Sync mod to MySQL error:', e)
           }
-        } catch (e) {
-          console.error('Sync mod to MySQL error:', e)
-        }
+        })()
+        this._lastModWritePromise = writeTask
+        await writeTask
       }
 
       return newMod
     },
 
+    // 編輯更新改裝紀錄 (支援修改名稱、分類、金額、日期、里程、星等、心得與照片)
+    async updateModification(id, updatedFields) {
+      const idx = this.modifications.findIndex(m => String(m.id) === String(id))
+      if (idx === -1) return null
+
+      const existing = this.modifications[idx]
+      const odo = Number(updatedFields.odometer ?? existing.odometer) || 0
+      const updatedMod = {
+        ...existing,
+        date: updatedFields.date || existing.date,
+        odometer: odo,
+        title: updatedFields.title || existing.title,
+        category: updatedFields.category || existing.category || 'exterior',
+        cost: updatedFields.cost !== undefined ? (Number(updatedFields.cost) || 0) : existing.cost,
+        boughtFrom: updatedFields.boughtFrom !== undefined ? updatedFields.boughtFrom : existing.boughtFrom,
+        status: updatedFields.status || existing.status || 'installed',
+        rating: Number(updatedFields.rating ?? existing.rating) || 5,
+        note: updatedFields.note !== undefined ? updatedFields.note : existing.note,
+        imageUrl: updatedFields.imageUrl !== undefined ? updatedFields.imageUrl : existing.imageUrl
+      }
+
+      this.modifications.splice(idx, 1, updatedMod)
+      if (odo > Number(this.vehicle.currentOdo || 0)) {
+        this.updateOdometer(odo)
+      } else {
+        this.persist()
+      }
+
+      if (this.isAuthenticated && !String(id).startsWith('mod-')) {
+        const writeTask = (async () => {
+          try {
+            const res = await api.updateModification(id, updatedMod)
+            if (res && res.id) {
+              const currentIdx = this.modifications.findIndex(m => String(m.id) === String(id))
+              if (currentIdx !== -1) {
+                this.modifications[currentIdx] = {
+                  ...updatedMod,
+                  id: res.id
+                }
+              }
+              this.isBackendOnline = true
+              this.persist()
+            }
+          } catch (e) {
+            console.error('Update mod to MySQL error:', e)
+          }
+        })()
+        this._lastModWritePromise = writeTask
+        await writeTask
+      }
+
+      return updatedMod
+    },
+
     async deleteModification(id) {
-      this.modifications = this.modifications.filter(m => m.id !== id)
+      this.modifications = this.modifications.filter(m => String(m.id) !== String(id))
       this.persist()
-      if (this.isAuthenticated) {
+      if (this.isAuthenticated && !String(id).startsWith('mod-')) {
         try {
           await api.deleteModification(id)
           this.isBackendOnline = true

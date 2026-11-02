@@ -7,6 +7,7 @@ import {
   TrendingUp, 
   BarChart3, 
   Trash2, 
+  Pencil,
   DollarSign, 
   Gauge, 
   Calendar,
@@ -24,7 +25,23 @@ ChartJS.register(...registerables)
 
 const store = useMotoStore()
 const showAddModal = ref(false)
+const editingLog = ref(null)
 const timeRange = ref('all') // 'week' | 'month' | 'year' | 'all'
+
+const openAddModal = () => {
+  editingLog.value = null
+  showAddModal.value = true
+}
+
+const openEditModal = (log) => {
+  editingLog.value = log
+  showAddModal.value = true
+}
+
+const closeModal = () => {
+  showAddModal.value = false
+  editingLog.value = null
+}
 
 // 進入加油畫面時，精準僅同步加油紀錄 (/api/fuel)
 onMounted(() => {
@@ -200,7 +217,7 @@ const deleteLog = (id) => {
         <h2 class="page-title">油耗與加油分析</h2>
         <p class="page-subtitle">SUI 125 燃油經濟性與費用追蹤</p>
       </div>
-      <button class="btn btn-primary btn-sm" @click="showAddModal = true">
+      <button class="btn btn-primary btn-sm" @click="openAddModal">
         <Plus :size="16" /> 記錄加油
       </button>
     </div>
@@ -285,11 +302,18 @@ const deleteLog = (id) => {
             <div class="station-meta">
               <span class="station-tag">{{ log.gasStation || '加油站' }}</span>
               <span class="fuel-grade-badge">{{ log.fuelType }}無鉛</span>
-              <span class="log-date">{{ log.date }}</span>
+              <button type="button" class="log-date-btn" @click="openEditModal(log)" title="點擊修改加油日期">
+                {{ log.date }} <Pencil :size="11" />
+              </button>
             </div>
-            <button class="btn-delete" @click="deleteLog(log.id)" title="刪除紀錄">
-              <Trash2 :size="15" />
-            </button>
+            <div class="log-actions">
+              <button class="btn-edit" @click="openEditModal(log)" title="編輯紀錄">
+                <Pencil :size="15" />
+              </button>
+              <button class="btn-delete" @click="deleteLog(log.id)" title="刪除紀錄">
+                <Trash2 :size="15" />
+              </button>
+            </div>
           </div>
 
           <div class="log-middle-row">
@@ -339,7 +363,7 @@ const deleteLog = (id) => {
     </div>
 
     <!-- Modal -->
-    <ModalAddFuel v-if="showAddModal" @close="showAddModal = false" />
+    <ModalAddFuel v-if="showAddModal" :edit-log="editingLog" @close="closeModal" />
   </div>
 </template>
 
@@ -518,17 +542,41 @@ const deleteLog = (id) => {
   border-radius: 4px;
 }
 
-.log-date {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.log-date-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
+.log-date-btn:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
+}
+
+.log-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-edit,
 .btn-delete {
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
+}
+.btn-edit:hover {
+  color: #38bdf8;
 }
 .btn-delete:hover {
   color: #ff6b6b;

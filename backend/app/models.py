@@ -73,7 +73,7 @@ class MaintenanceLog(Base):
     shop = Column(String(50), default="SUZUKI 經銷門市")
     items = Column(Text, nullable=True) # JSON 字串或文字
     note = Column(Text, nullable=True)
-    invoice_image_url = Column(String(255), nullable=True)
+    invoice_image_url = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="maintenance_logs")
@@ -94,7 +94,7 @@ class Modification(Base):
     status = Column(String(30), default="installed")
     rating = Column(Integer, default=5)
     note = Column(Text, nullable=True)
-    image_url = Column(String(255), nullable=True)
+    image_url = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     owner = relationship("User", back_populates="modifications")

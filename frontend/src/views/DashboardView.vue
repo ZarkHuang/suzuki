@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   ChevronRight,
   Zap,
-  Calendar
+  Calendar,
+  Pencil
 } from 'lucide-vue-next'
 
 import ModalQuickOdo from '../components/ModalQuickOdo.vue'
@@ -25,8 +26,24 @@ const store = useMotoStore()
 const showOdoModal = ref(false)
 const showFuelModal = ref(false)
 const showMaintModal = ref(false)
+const editingMaintLog = ref(null)
 
-// 進入儀表首頁時，精準僅同步車輛與前 3 筆輕量動態
+const openAddMaintModal = () => {
+  editingMaintLog.value = null
+  showMaintModal.value = true
+}
+
+const openEditMaintModal = (log) => {
+  editingMaintLog.value = log
+  showMaintModal.value = true
+}
+
+const closeMaintModal = () => {
+  showMaintModal.value = false
+  editingMaintLog.value = null
+}
+
+// 進入儀表首頁時，同步車輛與紀錄摘要
 onMounted(() => {
   store.syncDashboardSummary()
 })
@@ -38,6 +55,7 @@ const avgEfficiency = computed(() => store.averageEfficiency)
 const totalExpenses = computed(() => store.totalExpenses)
 const nextMaint = computed(() => store.nextMaintenance)
 const recentFuel = computed(() => store.fuelLogs[0] || null)
+const recentMaint = computed(() => store.maintenanceLogs[0] || null)
 
 // 計算距離下次保養的進度百分比 (0~100)
 const maintProgress = computed(() => {
@@ -143,7 +161,7 @@ const maintProgress = computed(() => {
         <span>記錄加油</span>
       </button>
 
-      <button class="btn btn-secondary action-btn" @click="showMaintModal = true">
+      <button class="btn btn-secondary action-btn" @click="openAddMaintModal">
         <Wrench :size="18" class="icon-red" />
         <span>記錄保養</span>
       </button>
@@ -154,12 +172,45 @@ const maintProgress = computed(() => {
       </button>
     </div>
 
-    <!-- 最近一次加油與車況簡訊 -->
+    <!-- 最近一次保養與加油動態 -->
     <div class="section-title-row">
       <div class="section-title">
         <Calendar :size="16" /> 最近動態
       </div>
-      <button class="btn-text-link" @click="router.push('/fuel')">查看全部 ></button>
+      <div class="section-links">
+        <button class="btn-text-link" @click="router.push('/maintenance')">保養紀錄 ></button>
+        <button class="btn-text-link" @click="router.push('/fuel')">加油紀錄 ></button>
+      </div>
+    </div>
+
+    <div v-if="recentMaint" class="card recent-activity-card">
+      <div class="activity-header">
+        <div class="activity-type">
+          <div class="type-icon maint-type-icon"><Wrench :size="16" /></div>
+          <div>
+            <div class="activity-name">{{ recentMaint.title }}</div>
+            <div class="activity-date">
+              <button type="button" class="btn-date-inline" @click="openEditMaintModal(recentMaint)" title="點擊修改保養日期">
+                {{ recentMaint.date }} <Pencil :size="11" />
+              </button>
+              <span>· 里程 {{ Number(recentMaint.odometer).toLocaleString() }} km</span>
+            </div>
+          </div>
+        </div>
+        <div class="activity-cost">
+          <div class="cost-val">NT$ {{ recentMaint.cost }}</div>
+          <button type="button" class="btn-edit-inline" @click="openEditMaintModal(recentMaint)">
+            <Pencil :size="12" /> 編輯
+          </button>
+        </div>
+      </div>
+
+      <div v-if="recentMaint.items && recentMaint.items.length > 0" class="activity-footer">
+        <span class="footer-chip">
+          施工：{{ recentMaint.items.map(i => typeof i === 'string' ? i : i.name).slice(0, 2).join('、') }}
+          <template v-if="recentMaint.items.length > 2"> 等 {{ recentMaint.items.length }} 項</template>
+        </span>
+      </div>
     </div>
 
     <div v-if="recentFuel" class="card recent-activity-card">
@@ -187,8 +238,8 @@ const maintProgress = computed(() => {
       </div>
     </div>
 
-    <div v-else class="empty-state card">
-      <p>目前尚無加油紀錄，立即點擊上方按鈕記錄第一次加油吧！</p>
+    <div v-if="!recentFuel && !recentMaint" class="empty-state card">
+      <p>目前尚無加油或保養紀錄，立即點擊上方按鈕開始記錄吧！</p>
     </div>
 
     <!-- AI 健檢快速諮詢入口橫幅 -->
@@ -209,7 +260,7 @@ const maintProgress = computed(() => {
     <!-- Modals -->
     <ModalQuickOdo v-if="showOdoModal" @close="showOdoModal = false" />
     <ModalAddFuel v-if="showFuelModal" @close="showFuelModal = false" />
-    <ModalAddMaint v-if="showMaintModal" @close="showMaintModal = false" />
+    <ModalAddMaint v-if="showMaintModal" :edit-log="editingMaintLog" @close="closeMaintModal" />
   </div>
 </template>
 
@@ -477,6 +528,12 @@ const maintProgress = computed(() => {
   color: #cbd5e1;
 }
 
+.section-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .btn-text-link {
   background: transparent;
   border: none;
@@ -493,12 +550,15 @@ const maintProgress = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .activity-type {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
 .type-icon {
@@ -508,11 +568,17 @@ const maintProgress = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .fuel-type-icon {
   background: rgba(0, 91, 172, 0.2);
   color: #38bdf8;
+}
+
+.maint-type-icon {
+  background: rgba(230, 0, 18, 0.18);
+  color: #ff6b6b;
 }
 
 .activity-name {
@@ -522,12 +588,59 @@ const maintProgress = computed(() => {
 }
 
 .activity-date {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   font-size: 0.75rem;
   color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.btn-date-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-date-inline:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
 }
 
 .activity-cost {
   text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.btn-edit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-edit-inline:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
 }
 
 .cost-val {

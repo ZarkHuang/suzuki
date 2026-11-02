@@ -4,30 +4,45 @@ import { useMotoStore } from '../stores/motoStore'
 import { X, Fuel, Check, Sparkles, Calendar, RotateCcw } from 'lucide-vue-next'
 import confetti from 'canvas-confetti'
 
+const props = defineProps({
+  editLog: {
+    type: Object,
+    default: null
+  }
+})
+
 const emit = defineEmits(['close', 'saved'])
 const store = useMotoStore()
 
-// 取得今天與昨天 YYYY-MM-DD
-const getTodayStr = () => new Date().toISOString().split('T')[0]
+const isEditMode = computed(() => !!props.editLog)
+const isSaving = ref(false)
+
+// 取得今天與昨天 YYYY-MM-DD (以本地時區為準)
+const toLocalDateStr = (d = new Date()) => {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const getTodayStr = () => toLocalDateStr(new Date())
 const getYesterdayStr = () => {
   const d = new Date()
   d.setDate(d.getDate() - 1)
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(d)
 }
 
-const date = ref(getTodayStr())
-const odometer = ref(store.currentOdometer || store.vehicle.currentOdo || 0)
-const liters = ref('')
-const totalCost = ref('')
-const pricePerLiter = ref(30.2) // 每公升油價 (車主可自由填寫修改)
-const fuelType = ref(store.vehicle.fuelType || '92')
-const gasStation = ref('台灣中油')
-const fullTank = ref(true)
-const note = ref('')
+const date = ref(props.editLog?.date || getTodayStr())
+const odometer = ref(props.editLog ? props.editLog.odometer : (store.currentOdometer || store.vehicle.currentOdo || 0))
+const liters = ref(props.editLog ? props.editLog.liters : '')
+const totalCost = ref(props.editLog ? props.editLog.totalCost : '')
+const pricePerLiter = ref(props.editLog ? (props.editLog.pricePerLiter || 30.2) : 30.2)
+const fuelType = ref(props.editLog ? (props.editLog.fuelType || '92') : (store.vehicle.fuelType || '92'))
+const gasStation = ref(props.editLog ? (props.editLog.gasStation || '台灣中油') : '台灣中油')
+const fullTank = ref(props.editLog ? (props.editLog.fullTank !== false) : true)
+const note = ref(props.editLog?.note || '')
 
 onMounted(() => {
-  // 自動帶入車輛最新當前總里程
-  if (store.currentOdometer > 0) {
+  if (!isEditMode.value && store.currentOdometer > 0) {
     odometer.value = store.currentOdometer
   }
 })
@@ -87,33 +102,44 @@ const estimatedEfficiency = computed(() => {
   return (trip / l).toFixed(2)
 })
 
-const save = () => {
+const save = async () => {
+  if (isSaving.value) return
   if (!odometer.value || !liters.value) {
     alert('請填寫加油時的累積總里程與公升數')
     return
   }
 
-  const log = store.addFuelLog({
-    date: date.value,
-    odometer: Number(odometer.value),
-    liters: Number(liters.value),
-    pricePerLiter: Number(pricePerLiter.value || 30.2),
-    totalCost: Number(totalCost.value) || Math.round(Number(liters.value) * Number(pricePerLiter.value || 30.2)),
-    fuelType: fuelType.value,
-    gasStation: gasStation.value,
-    fullTank: fullTank.value,
-    note: note.value
-  })
+  isSaving.value = true
+  try {
+    const payload = {
+      date: date.value || getTodayStr(),
+      odometer: Number(odometer.value),
+      liters: Number(liters.value),
+      pricePerLiter: Number(pricePerLiter.value || 30.2),
+      totalCost: Number(totalCost.value) || Math.round(Number(liters.value) * Number(pricePerLiter.value || 30.2)),
+      fuelType: fuelType.value,
+      gasStation: gasStation.value,
+      fullTank: fullTank.value,
+      note: note.value
+    }
 
-  // 放彩帶特效慶祝記帳成功
-  confetti({
-    particleCount: 40,
-    spread: 60,
-    origin: { y: 0.8 }
-  })
+    let log = null
+    if (isEditMode.value && props.editLog?.id) {
+      log = await store.updateFuelLog(props.editLog.id, payload)
+    } else {
+      log = await store.addFuelLog(payload)
+      confetti({
+        particleCount: 40,
+        spread: 60,
+        origin: { y: 0.8 }
+      })
+    }
 
-  emit('saved', log)
-  emit('close')
+    emit('saved', log)
+    emit('close')
+  } finally {
+    isSaving.value = false
+  }
 }
 </script>
 
@@ -123,7 +149,7 @@ const save = () => {
       <div class="modal-header">
         <div class="title-with-icon">
           <Fuel :size="20" class="icon-blue" />
-          <h3>記錄加油資訊</h3>
+          <h3>{{ isEditMode ? '編輯加油紀錄' : '記錄加油資訊' }}</h3>
         </div>
         <button class="btn-close" @click="emit('close')">
           <X :size="20" />
@@ -236,9 +262,9 @@ const save = () => {
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="emit('close')">取消</button>
-        <button class="btn btn-primary" @click="save">
-          <Check :size="18" /> 儲存加油紀錄
+        <button type="button" class="btn btn-secondary" @click="emit('close')">取消</button>
+        <button type="button" class="btn btn-primary" :disabled="isSaving" @click="save">
+          <Check :size="18" /> {{ isSaving ? '儲存中...' : (isEditMode ? '儲存修改' : '儲存加油紀錄') }}
         </button>
       </div>
     </div>

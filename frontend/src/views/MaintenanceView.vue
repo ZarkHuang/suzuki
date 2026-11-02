@@ -8,11 +8,10 @@ import {
   Clock, 
   AlertCircle, 
   Trash2, 
+  Pencil,
   ShieldCheck, 
   Calendar,
   Layers,
-  ChevronRight,
-  ExternalLink,
   Info
 } from 'lucide-vue-next'
 
@@ -21,36 +20,60 @@ import ModalAddMaint from '../components/ModalAddMaint.vue'
 const store = useMotoStore()
 const showAddModal = ref(false)
 const selectedPreset = ref(null)
+const editingLog = ref(null)
 const activeTab = ref('schedule') // 'schedule' | 'history' | 'parts'
 
-// 進入保養畫面時，精準僅同步保養日誌與車輛里程
+// 進入保養畫面時，精準同步保養日誌與車輛里程
 onMounted(() => {
   store.syncMaintenanceLogs()
   store.syncVehicle()
 })
 
-
-
 const currentOdo = computed(() => store.currentOdometer)
 const schedules = computed(() => store.schedules)
 const maintenanceLogs = computed(() => store.maintenanceLogs)
+const latestMaintLog = computed(() => store.maintenanceLogs[0] || null)
 const partsStatus = computed(() => store.partsStatusList)
 const totalMaintCost = computed(() => store.totalExpenses.maintenance)
 
+// 取得該官方排程對應的已完成保養紀錄
+const getCompletedLog = (mileage) => {
+  return store.getScheduleCompletedLog(mileage)
+}
+
 // 判斷該排程是否已經做過
 const isScheduleCompleted = (mileage) => {
-  return maintenanceLogs.value.some(log => Math.abs(log.odometer - mileage) <= 150)
+  return !!getCompletedLog(mileage)
 }
 
 // 快速點選特定排程進行保養紀錄
 const startMaintForSchedule = (schedule) => {
+  const existing = getCompletedLog(schedule.mileage)
+  if (existing) {
+    openEditModal(existing)
+    return
+  }
+  editingLog.value = null
   selectedPreset.value = schedule
   showAddModal.value = true
 }
 
 const openGeneralAddModal = () => {
+  editingLog.value = null
   selectedPreset.value = null
   showAddModal.value = true
+}
+
+const openEditModal = (log) => {
+  selectedPreset.value = null
+  editingLog.value = log
+  showAddModal.value = true
+}
+
+const closeModal = () => {
+  showAddModal.value = false
+  editingLog.value = null
+  selectedPreset.value = null
 }
 
 const deleteLog = (id) => {
@@ -100,6 +123,42 @@ const deleteLog = (id) => {
 
     <!-- Tab 1: 官方定保排程清單 -->
     <div v-if="activeTab === 'schedule'" class="schedule-tab-content">
+      <!-- 最新一筆保養摘要卡 (與首頁新增保養即時同步，可直接點擊修改日期或內容) -->
+      <div v-if="latestMaintLog" class="card latest-maint-summary-card">
+        <div class="latest-summary-top">
+          <div class="latest-badge-row">
+            <span class="badge badge-green"><CheckCircle2 :size="12" /> 最近保養紀錄</span>
+            <button
+              type="button"
+              class="date-edit-pill"
+              title="點擊修改保養日期與內容"
+              @click="openEditModal(latestMaintLog)"
+            >
+              <Calendar :size="12" />
+              <span>{{ latestMaintLog.date }}</span>
+              <Pencil :size="11" />
+            </button>
+          </div>
+          <div class="latest-summary-actions">
+            <button type="button" class="btn-inline-edit" @click="openEditModal(latestMaintLog)">
+              <Pencil :size="13" /> 編輯紀錄
+            </button>
+            <button type="button" class="btn-inline-link" @click="activeTab = 'history'">
+              全部 ({{ maintenanceLogs.length }})
+            </button>
+          </div>
+        </div>
+        <div class="latest-summary-main" @click="openEditModal(latestMaintLog)">
+          <div>
+            <div class="latest-title">{{ latestMaintLog.title }}</div>
+            <div class="latest-meta">
+              保養里程 {{ Number(latestMaintLog.odometer).toLocaleString() }} km · {{ latestMaintLog.shopName }}
+            </div>
+          </div>
+          <div class="latest-cost stat-number">NT$ {{ latestMaintLog.cost }}</div>
+        </div>
+      </div>
+
       <div class="info-banner">
         <Info :size="16" class="icon-blue" />
         <span>Suzuki SUI 125 原廠規範：新車首保 500km，其後機油每 2,000km、齒輪油每 4,000km、重要耗材每 8,000 / 16,000km 定期更換。</span>
@@ -123,8 +182,13 @@ const deleteLog = (id) => {
             </div>
             
             <div class="schedule-status-badge">
-              <span v-if="isScheduleCompleted(item.mileage)" class="badge badge-green">
-                <CheckCircle2 :size="12" /> 已完成
+              <span 
+                v-if="getCompletedLog(item.mileage)" 
+                class="badge badge-green clickable-badge"
+                title="點擊編輯此筆保養紀錄與日期"
+                @click="openEditModal(getCompletedLog(item.mileage))"
+              >
+                <CheckCircle2 :size="12" /> 已完成 · {{ getCompletedLog(item.mileage).date }}
               </span>
               <span v-else-if="item.mileage <= currentOdo" class="badge badge-red">
                 <AlertCircle :size="12" /> 已達里程需保養
@@ -142,6 +206,25 @@ const deleteLog = (id) => {
             <h4 class="schedule-title">{{ item.title }}</h4>
             <p class="schedule-desc">{{ item.description }}</p>
 
+            <!-- 若已完成，顯示實際紀錄之日期、里程與花費，點擊可直接編輯 -->
+            <div 
+              v-if="getCompletedLog(item.mileage)" 
+              class="completed-record-box"
+              @click="openEditModal(getCompletedLog(item.mileage))"
+            >
+              <div class="completed-record-info">
+                <Calendar :size="14" class="icon-green" />
+                <span>
+                  實際保養日期：<strong>{{ getCompletedLog(item.mileage).date }}</strong> · 
+                  里程 <strong>{{ Number(getCompletedLog(item.mileage).odometer).toLocaleString() }} km</strong> · 
+                  實付 <strong>NT$ {{ getCompletedLog(item.mileage).cost }}</strong>
+                </span>
+              </div>
+              <span class="completed-edit-hint">
+                <Pencil :size="12" /> 修改日期/內容
+              </span>
+            </div>
+
             <div class="maint-items-tags">
               <span 
                 v-for="(sub, sIdx) in item.items" 
@@ -155,7 +238,9 @@ const deleteLog = (id) => {
           </div>
 
           <div class="schedule-card-footer">
-            <span class="est-cost">預估花費: NT$ {{ item.estimatedCost || 350 }}</span>
+            <span class="est-cost">
+              {{ getCompletedLog(item.mileage) ? `實際花費: NT$ ${getCompletedLog(item.mileage).cost}` : `預估花費: NT$ ${item.estimatedCost || 350}` }}
+            </span>
             <button 
               v-if="!isScheduleCompleted(item.mileage)"
               class="btn btn-secondary btn-sm"
@@ -163,9 +248,18 @@ const deleteLog = (id) => {
             >
               <Wrench :size="14" class="icon-blue" /> 記錄此項保養
             </button>
-            <span v-else class="done-check-text">
-              <CheckCircle2 :size="14" /> 原廠保養已完成
-            </span>
+            <div v-else class="completed-footer-actions">
+              <span class="done-check-text">
+                <CheckCircle2 :size="14" /> 已完成
+              </span>
+              <button 
+                type="button"
+                class="btn btn-secondary btn-sm"
+                @click="openEditModal(getCompletedLog(item.mileage))"
+              >
+                <Pencil :size="13" /> 編輯紀錄
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -222,12 +316,20 @@ const deleteLog = (id) => {
       <div v-if="maintenanceLogs.length > 0" class="history-cards">
         <div v-for="log in maintenanceLogs" :key="log.id" class="card maint-history-card">
           <div class="history-top">
-            <div>
+            <div class="history-title-group" @click="openEditModal(log)">
               <div class="maint-title-text">{{ log.title }}</div>
-              <div class="maint-meta-text">{{ log.date }} · 里程 {{ log.odometer.toLocaleString() }} km · {{ log.shopName }}</div>
+              <div class="maint-meta-text">
+                <button type="button" class="meta-date-btn" title="點擊修改保養日期">
+                  <Calendar :size="12" /> {{ log.date }} <Pencil :size="11" />
+                </button>
+                <span>· 里程 {{ Number(log.odometer).toLocaleString() }} km · {{ log.shopName }}</span>
+              </div>
             </div>
             <div class="history-actions">
               <span class="maint-cost-val stat-number">NT${{ log.cost }}</span>
+              <button class="btn-edit" @click="openEditModal(log)" title="編輯保養紀錄">
+                <Pencil :size="15" />
+              </button>
               <button class="btn-delete" @click="deleteLog(log.id)" title="刪除紀錄">
                 <Trash2 :size="15" />
               </button>
@@ -258,11 +360,12 @@ const deleteLog = (id) => {
       </div>
     </div>
 
-    <!-- Modal -->
+    <!-- 新增 / 編輯保養 Modal -->
     <ModalAddMaint 
       v-if="showAddModal" 
       :preset-schedule="selectedPreset"
-      @close="showAddModal = false" 
+      :edit-log="editingLog"
+      @close="closeModal" 
     />
   </div>
 </template>
@@ -278,6 +381,12 @@ const deleteLog = (id) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+}
+
+.page-header .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -314,12 +423,118 @@ const deleteLog = (id) => {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .tab-item.active {
   background: var(--suzuki-blue);
   color: #fff;
   box-shadow: 0 2px 8px var(--suzuki-blue-glow);
+}
+
+/* 最近保養摘要卡 */
+.latest-maint-summary-card {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(22, 26, 35, 0.92) 100%);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.latest-summary-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.latest-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.date-edit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.date-edit-pill:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
+}
+
+.latest-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-inline-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-inline-edit:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
+}
+
+.btn-inline-link {
+  background: transparent;
+  border: none;
+  color: var(--suzuki-blue-light);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.latest-summary-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.latest-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.latest-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.latest-cost {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #34d399;
+  white-space: nowrap;
 }
 
 .info-banner {
@@ -336,6 +551,7 @@ const deleteLog = (id) => {
 }
 
 .icon-blue { color: var(--suzuki-blue-light); }
+.icon-green { color: #34d399; flex-shrink: 0; }
 
 .schedule-list {
   display: flex;
@@ -350,8 +566,7 @@ const deleteLog = (id) => {
 }
 
 .schedule-card.completed-card {
-  opacity: 0.75;
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.35);
 }
 
 .schedule-card.upcoming-card {
@@ -363,6 +578,11 @@ const deleteLog = (id) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+}
+
+.clickable-badge {
+  cursor: pointer;
 }
 
 .milestone-badge {
@@ -396,6 +616,46 @@ const deleteLog = (id) => {
   margin-bottom: 8px;
 }
 
+.completed-record-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.completed-record-box:hover {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.completed-record-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.completed-record-info strong {
+  color: #fff;
+}
+
+.completed-edit-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
 .maint-items-tags {
   display: flex;
   flex-wrap: wrap;
@@ -423,11 +683,18 @@ const deleteLog = (id) => {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 10px;
   margin-top: 4px;
+  gap: 8px;
 }
 
 .est-cost {
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.completed-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .done-check-text {
@@ -536,7 +803,14 @@ const deleteLog = (id) => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 10px;
   margin-bottom: 10px;
+}
+
+.history-title-group {
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
 .maint-title-text {
@@ -546,15 +820,40 @@ const deleteLog = (id) => {
 }
 
 .maint-meta-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+}
+
+.meta-date-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.meta-date-btn:hover {
+  background: var(--suzuki-blue);
+  color: #fff;
 }
 
 .history-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .maint-cost-val {
@@ -563,13 +862,31 @@ const deleteLog = (id) => {
   color: #ff6b6b;
 }
 
+.btn-edit,
 .btn-delete {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-secondary);
   cursor: pointer;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
-.btn-delete:hover { color: #ff6b6b; }
+
+.btn-edit:hover {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(0, 91, 172, 0.2);
+}
+
+.btn-delete:hover {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.4);
+  background: rgba(230, 0, 18, 0.15);
+}
 
 .history-items {
   background: rgba(255, 255, 255, 0.02);

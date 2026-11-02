@@ -5,12 +5,18 @@ export const getBaseUrl = () => {
   if (typeof window !== 'undefined') {
     // 檢查使用者在設定頁是否自訂了網址
     try {
-      const saved = localStorage.getItem('suzuki_sui_motolog_v1')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.settings && parsed.settings.apiUrl) {
-          // 清理末尾斜線與多餘的 /api (由端點統一帶 /api)
-          return parsed.settings.apiUrl.replace(/\/$/, '').replace(/\/api$/, '')
+      const savedAuth = localStorage.getItem('suzuki_sui_motolog_auth')
+      if (savedAuth) {
+        const authParsed = JSON.parse(savedAuth)
+        const userKey = authParsed?.user?.id
+          ? `suzuki_sui_motolog_user_${authParsed.user.id}`
+          : 'suzuki_sui_motolog_guest'
+        const savedUser = localStorage.getItem(userKey)
+        if (savedUser) {
+          const parsed = JSON.parse(savedUser)
+          if (parsed.settings && parsed.settings.apiUrl) {
+            return parsed.settings.apiUrl.replace(/\/$/, '').replace(/\/api$/, '')
+          }
         }
       }
     } catch (e) {}
@@ -226,6 +232,33 @@ export const api = {
     return res.data
   },
 
+  async updateFuelLog(id, log) {
+    const payload = {
+      date: log.date,
+      odometer: Number(log.odometer),
+      liters: Number(log.liters),
+      price_per_liter: Number(log.pricePerLiter || 30.2),
+      total_cost: Number(log.totalCost || 0),
+      fuel_type: log.fuelType || '92',
+      gas_station: log.gasStation || '台灣中油',
+      trip_distance: Number(log.tripDistance || 0),
+      efficiency: Number(log.efficiency || 0),
+      full_tank: log.fullTank !== false,
+      note: log.note || ''
+    }
+    try {
+      const res = await apiClient.put(`/api/fuel/${id}`, payload)
+      return formatFuelFromBackend(res.data)
+    } catch (err) {
+      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
+        await apiClient.delete(`/api/fuel/${id}`).catch(() => {})
+        const created = await apiClient.post('/api/fuel', payload)
+        return formatFuelFromBackend(created.data)
+      }
+      throw err
+    }
+  },
+
   async deleteFuelLog(id) {
     const res = await apiClient.delete(`/api/fuel/${id}`)
     return res.data
@@ -251,6 +284,31 @@ export const api = {
     }
     const res = await apiClient.post('/api/maintenance', payload)
     return res.data
+  },
+
+  async updateMaintenanceLog(id, log) {
+    const payload = {
+      date: log.date,
+      odometer: Number(log.odometer),
+      title: log.title || '定期保養',
+      shop: log.shopName || log.shop || 'SUZUKI 經銷門市',
+      cost: Number(log.cost || 0),
+      items: log.items || [],
+      note: log.note || '',
+      invoice_image_url: log.receiptImage || log.invoice_image_url || ''
+    }
+    try {
+      const res = await apiClient.put(`/api/maintenance/${id}`, payload)
+      return formatMaintFromBackend(res.data)
+    } catch (err) {
+      // 若遠端舊版 API 尚未支援 PUT，自動以先刪後建進行雲端相容同步
+      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
+        await apiClient.delete(`/api/maintenance/${id}`).catch(() => {})
+        const created = await apiClient.post('/api/maintenance', payload)
+        return formatMaintFromBackend(created.data)
+      }
+      throw err
+    }
   },
 
   async deleteMaintenanceLog(id) {
@@ -282,6 +340,32 @@ export const api = {
     return res.data
   },
 
+  async updateModification(id, mod) {
+    const payload = {
+      date: mod.date,
+      odometer: Number(mod.odometer || 0),
+      title: mod.title,
+      category: mod.category || 'exterior',
+      cost: Number(mod.cost || 0),
+      bought_from: mod.boughtFrom || mod.bought_from || '',
+      status: mod.status || 'installed',
+      rating: Number(mod.rating || 5),
+      note: mod.note || '',
+      image_url: mod.imageUrl || mod.image_url || ''
+    }
+    try {
+      const res = await apiClient.put(`/api/modifications/${id}`, payload)
+      return formatModFromBackend(res.data)
+    } catch (err) {
+      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
+        await apiClient.delete(`/api/modifications/${id}`).catch(() => {})
+        const created = await apiClient.post('/api/modifications', payload)
+        return formatModFromBackend(created.data)
+      }
+      throw err
+    }
+  },
+
   async deleteModification(id) {
     const res = await apiClient.delete(`/api/modifications/${id}`)
     return res.data
@@ -305,4 +389,43 @@ export const api = {
     })
     return res.data
   }
+}
+
+// 圖片輕量壓縮輔助函式 (將數 MB 的手機原圖壓縮至約 40~80KB，確保超過 10 筆、100 筆含圖資料也不會撐爆 LocalStorage 或網路請求)
+export const compressImageFile = (file, maxDimension = 960, quality = 0.72) => {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve('')
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('讀取圖片失敗'))
+    reader.onload = (event) => {
+      const rawDataUrl = event.target.result
+      const img = new Image()
+      img.onerror = () => resolve(rawDataUrl)
+      img.onload = () => {
+        try {
+          let { width, height } = img
+          if (width > maxDimension || height > maxDimension) {
+            if (width >= height) {
+              height = Math.round((height * maxDimension) / width)
+              width = maxDimension
+            } else {
+              width = Math.round((width * maxDimension) / height)
+              height = maxDimension
+            }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          const compressed = canvas.toDataURL('image/jpeg', quality)
+          resolve(compressed)
+        } catch (err) {
+          resolve(rawDataUrl)
+        }
+      }
+      img.src = rawDataUrl
+    }
+    reader.readAsDataURL(file)
+  })
 }

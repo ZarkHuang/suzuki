@@ -23,11 +23,11 @@ def get_fuel_logs(
         base_query = db.query(models.FuelLog).filter(models.FuelLog.user_id == user.id)
         data_total = base_query.count()
 
-        # 方案 A：若未主動指定分頁參數，或傳入 all_data=True，預設全量撈取該用戶歷史紀錄（永不截斷）
+        # 若未主動指定分頁參數，或傳入 all_data=True，預設全量撈取該用戶歷史紀錄（永不截斷）
         is_paginated_request = (page is not None or page_size is not None or limit is not None or offset is not None) and not all_data
 
         if not is_paginated_request:
-            logs = base_query.order_by(models.FuelLog.odometer.desc()).limit(3000).all()
+            logs = base_query.order_by(models.FuelLog.odometer.desc(), models.FuelLog.id.desc()).limit(3000).all()
             return {
                 "list": logs,
                 "pagination": {
@@ -42,7 +42,7 @@ def get_fuel_logs(
         actual_page_size = limit if (limit is not None and limit > 0) else (page_size if (page_size is not None and page_size > 0) else 50)
         actual_offset = offset if (offset is not None and offset >= 0) else ((actual_page - 1) * actual_page_size)
 
-        logs = base_query.order_by(models.FuelLog.odometer.desc()).offset(actual_offset).limit(actual_page_size).all()
+        logs = base_query.order_by(models.FuelLog.odometer.desc(), models.FuelLog.id.desc()).offset(actual_offset).limit(actual_page_size).all()
         page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else 1
 
         return {
@@ -95,6 +95,45 @@ def create_fuel_log(
 
     safe_commit_with_auto_id(db, db_log, models.FuelLog)
     return db_log
+
+
+@router.put("/{log_id}", response_model=schemas.FuelLogResponse)
+def update_fuel_log(
+    log_id: str,
+    log_in: schemas.FuelLogCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user)
+):
+    try:
+        f_id = int(log_id)
+        query = db.query(models.FuelLog).filter(models.FuelLog.id == f_id, models.FuelLog.user_id == user.id)
+    except ValueError:
+        query = db.query(models.FuelLog).filter(models.FuelLog.id == log_id, models.FuelLog.user_id == user.id)
+
+    db_log = query.first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="加油紀錄未找到")
+
+    db_log.date = log_in.date
+    db_log.odometer = log_in.odometer
+    db_log.liters = log_in.liters
+    db_log.price_per_liter = log_in.price_per_liter or 30.2
+    db_log.total_cost = log_in.total_cost or 0.0
+    db_log.fuel_type = log_in.fuel_type or "92"
+    db_log.gas_station = log_in.gas_station or "台灣中油"
+    db_log.trip_distance = log_in.trip_distance or 0.0
+    db_log.efficiency = log_in.efficiency or 0.0
+    db_log.is_full = 1 if log_in.full_tank else 0
+    db_log.note = log_in.note or ""
+
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
+    if vehicle and log_in.odometer > (vehicle.current_odo or 0):
+        vehicle.current_odo = log_in.odometer
+
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
 
 @router.delete("/{log_id}")
 def delete_fuel_log(

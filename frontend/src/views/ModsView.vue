@@ -6,6 +6,7 @@ import {
   Sparkles, 
   Plus, 
   Trash2, 
+  Pencil,
   Star, 
   ShoppingBag, 
   Tag, 
@@ -19,8 +20,24 @@ import ModalAddMod from '../components/ModalAddMod.vue'
 
 const store = useMotoStore()
 const showAddModal = ref(false)
+const editingMod = ref(null)
 const selectedCategory = ref('all')
 const previewImage = ref('')
+
+const openAddModal = () => {
+  editingMod.value = null
+  showAddModal.value = true
+}
+
+const openEditModal = (mod) => {
+  editingMod.value = mod
+  showAddModal.value = true
+}
+
+const closeModal = () => {
+  showAddModal.value = false
+  editingMod.value = null
+}
 
 // 進入改裝畫面時，精準僅同步改裝清單 (/api/modifications)
 onMounted(() => {
@@ -57,7 +74,7 @@ const deleteMod = (id) => {
         <h2 class="page-title">SUI 125 改裝日誌</h2>
         <p class="page-subtitle">風格升級、配件清單與改裝心得記錄</p>
       </div>
-      <button class="btn btn-primary btn-sm" @click="showAddModal = true">
+      <button class="btn btn-primary btn-sm" @click="openAddModal">
         <Plus :size="16" /> 記錄改裝
       </button>
     </div>
@@ -109,6 +126,9 @@ const deleteMod = (id) => {
             <span class="badge badge-amber">{{ getCategoryLabel(mod.category) }}</span>
             <div class="mod-actions">
               <span class="mod-cost stat-number">NT${{ mod.cost.toLocaleString() }}</span>
+              <button class="btn-edit" @click="openEditModal(mod)" title="編輯">
+                <Pencil :size="15" />
+              </button>
               <button class="btn-delete" @click="deleteMod(mod.id)" title="刪除">
                 <Trash2 :size="15" />
               </button>
@@ -164,8 +184,8 @@ const deleteMod = (id) => {
     </div>
 
 
-    <!-- 新增改裝 Modal -->
-    <ModalAddMod v-if="showAddModal" @close="showAddModal = false" />
+    <!-- 新增 / 編輯改裝 Modal -->
+    <ModalAddMod v-if="showAddModal" :edit-mod="editingMod" @close="closeModal" />
   </div>
 </template>
 
@@ -319,12 +339,14 @@ const deleteMod = (id) => {
   color: #fff;
 }
 
+.btn-edit,
 .btn-delete {
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
 }
+.btn-edit:hover { color: #38bdf8; }
 .btn-delete:hover { color: #ff6b6b; }
 
 .mod-title {

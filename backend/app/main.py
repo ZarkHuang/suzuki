@@ -68,9 +68,9 @@ def run_migrations():
             odometer INT NOT NULL,
             cost FLOAT DEFAULT 0.0,
             shop VARCHAR(50) DEFAULT 'SUZUKI 經銷門市',
-            items TEXT NULL,
+            items LONGTEXT NULL,
             note TEXT NULL,
-            invoice_image_url VARCHAR(255) NULL,
+            invoice_image_url LONGTEXT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """,
@@ -87,7 +87,7 @@ def run_migrations():
             status VARCHAR(30) DEFAULT 'installed',
             rating INT DEFAULT 5,
             note TEXT NULL,
-            image_url VARCHAR(255) NULL,
+            image_url LONGTEXT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """
@@ -133,18 +133,17 @@ def run_migrations():
             ("maintenance_logs", "item_id", "VARCHAR(50) DEFAULT 'general'"),
             ("maintenance_logs", "title", "VARCHAR(100) DEFAULT '定期保養'"),
             ("maintenance_logs", "shop", "VARCHAR(50) DEFAULT 'SUZUKI 經銷門市'"),
-            ("maintenance_logs", "items", "TEXT NULL"),
+            ("maintenance_logs", "items", "LONGTEXT NULL"),
             ("maintenance_logs", "note", "TEXT NULL"),
-            ("maintenance_logs", "invoice_image_url", "VARCHAR(255) NULL"),
+            ("maintenance_logs", "invoice_image_url", "LONGTEXT NULL"),
             ("modification_logs", "user_id", "INT NULL"),
             ("modification_logs", "bought_from", "VARCHAR(100) DEFAULT ''"),
             ("modification_logs", "status", "VARCHAR(30) DEFAULT 'installed'"),
             ("modification_logs", "rating", "INT DEFAULT 5"),
             ("modification_logs", "note", "TEXT NULL"),
-            ("modification_logs", "image_url", "VARCHAR(255) NULL"),
+            ("modification_logs", "image_url", "LONGTEXT NULL"),
         ]
 
-        # 2. 補齊所有缺少的欄位
         for tbl, col, col_type in columns_to_ensure:
             try:
                 cursor.execute(f"ALTER TABLE `{tbl}` ADD COLUMN `{col}` {col_type};")
@@ -152,10 +151,26 @@ def run_migrations():
                 print(f"🔧 補齊欄位成功: {tbl}.{col}")
                 results.append(f"Added {tbl}.{col}")
             except Exception as e:
-                # 欄位已存在 (MySQL error 1060 / Duplicate column)
                 results.append(f"Column exists {tbl}.{col}: {e}")
 
-        # 3. 確保所有資料表的主鍵 id 均具備 AUTO_INCREMENT
+        # 2.5 升級既有資料表的圖片與 JSON 長文字欄位為 LONGTEXT，避免 Base64 圖片在超過 VARCHAR(255) 時寫入失敗
+        columns_to_widen = [
+            ("maintenance_logs", "items", "LONGTEXT NULL"),
+            ("maintenance_logs", "note", "TEXT NULL"),
+            ("maintenance_logs", "invoice_image_url", "LONGTEXT NULL"),
+            ("modification_logs", "note", "TEXT NULL"),
+            ("modification_logs", "image_url", "LONGTEXT NULL"),
+            ("fuel_logs", "note", "TEXT NULL"),
+        ]
+        for tbl, col, col_type in columns_to_widen:
+            try:
+                cursor.execute(f"ALTER TABLE `{tbl}` MODIFY COLUMN `{col}` {col_type};")
+                raw_conn.commit()
+                results.append(f"Widened {tbl}.{col} to {col_type}")
+            except Exception as e:
+                results.append(f"Widen {tbl}.{col}: {e}")
+
+        # 3. 確保所有資料表的主鍵 id 均具備 INT AUTO_INCREMENT
         auto_inc_tables = ["users", "vehicles", "fuel_logs", "maintenance_logs", "modification_logs"]
         for tbl in auto_inc_tables:
             try:
@@ -181,7 +196,7 @@ run_migrations()
 app = FastAPI(
     title="SUZUKI SUI 125 雲端多租戶 API",
     description="模組化架構：分拆 Auth、Vehicle、Fuel、Maintenance、Modifications、AI 六大微服務路由",
-    version="2.3.0"
+    version="2.4.0"
 )
 
 # CORS 設定 (全面允許)

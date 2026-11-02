@@ -27,11 +27,11 @@ def get_modifications(
         base_query = db.query(models.Modification).filter(models.Modification.user_id == user.id)
         data_total = base_query.count()
 
-        # 方案 A：若未主動指定分頁參數，或傳入 all_data=True，預設全量撈取該用戶歷史紀錄（永不截斷）
+        # 若未主動指定分頁參數，或傳入 all_data=True，預設全量撈取該用戶歷史紀錄（永不截斷）
         is_paginated_request = (page is not None or page_size is not None or limit is not None or offset is not None) and not all_data
 
         if not is_paginated_request:
-            logs = base_query.order_by(models.Modification.odometer.desc()).limit(3000).all()
+            logs = base_query.order_by(models.Modification.odometer.desc(), models.Modification.id.desc()).limit(3000).all()
             return {
                 "list": logs,
                 "pagination": {
@@ -46,7 +46,7 @@ def get_modifications(
         actual_page_size = limit if (limit is not None and limit > 0) else (page_size if (page_size is not None and page_size > 0) else 50)
         actual_offset = offset if (offset is not None and offset >= 0) else ((actual_page - 1) * actual_page_size)
 
-        logs = base_query.order_by(models.Modification.odometer.desc()).offset(actual_offset).limit(actual_page_size).all()
+        logs = base_query.order_by(models.Modification.odometer.desc(), models.Modification.id.desc()).offset(actual_offset).limit(actual_page_size).all()
         page_total = math.ceil(data_total / actual_page_size) if (actual_page_size > 0 and data_total > 0) else 1
 
         return {
@@ -81,7 +81,7 @@ def create_modification(
     db_mod = models.Modification(
         user_id=user.id,
         date=mod_in.date,
-        odometer=mod_in.odometer,
+        odometer=mod_in.odometer or 0,
         title=mod_in.title,
         category=mod_in.category or "exterior",
         cost=mod_in.cost or 0,
@@ -93,11 +93,50 @@ def create_modification(
     )
     # 同步更新車輛里程
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
-    if vehicle and mod_in.odometer > (vehicle.current_odo or 0):
+    if vehicle and (mod_in.odometer or 0) > (vehicle.current_odo or 0):
         vehicle.current_odo = mod_in.odometer
 
     safe_commit_with_auto_id(db, db_mod, models.Modification)
     return db_mod
+
+
+@router.put("/{mod_id}", response_model=schemas.ModificationResponse)
+def update_modification(
+    mod_id: str,
+    mod_in: schemas.ModificationCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user)
+):
+    try:
+        m_id = int(mod_id)
+        query = db.query(models.Modification).filter(models.Modification.id == m_id, models.Modification.user_id == user.id)
+    except ValueError:
+        query = db.query(models.Modification).filter(models.Modification.id == mod_id, models.Modification.user_id == user.id)
+
+    db_mod = query.first()
+    if not db_mod:
+        raise HTTPException(status_code=404, detail="改裝紀錄未找到")
+
+    db_mod.date = mod_in.date
+    db_mod.odometer = mod_in.odometer if mod_in.odometer is not None else 0
+    db_mod.title = mod_in.title
+    db_mod.category = mod_in.category or "exterior"
+    db_mod.cost = mod_in.cost if mod_in.cost is not None else 0.0
+    db_mod.bought_from = mod_in.bought_from or ""
+    db_mod.status = mod_in.status or "installed"
+    db_mod.rating = mod_in.rating or 5
+    db_mod.note = mod_in.note or ""
+    if mod_in.image_url is not None:
+        db_mod.image_url = mod_in.image_url
+
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.user_id == user.id).first()
+    if vehicle and (mod_in.odometer or 0) > (vehicle.current_odo or 0):
+        vehicle.current_odo = mod_in.odometer
+
+    db.commit()
+    db.refresh(db_mod)
+    return db_mod
+
 
 @router.delete("/{mod_id}")
 def delete_modification(
@@ -105,12 +144,11 @@ def delete_modification(
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user)
 ):
-    # 若 mod_id 是字串/數字相容查找
     try:
         m_id = int(mod_id)
         query = db.query(models.Modification).filter(models.Modification.id == m_id, models.Modification.user_id == user.id)
     except ValueError:
-        query = db.query(models.Modification).filter(models.Modification.title == mod_id, models.Modification.user_id == user.id)
+        query = db.query(models.Modification).filter(models.Modification.id == mod_id, models.Modification.user_id == user.id)
 
     mod = query.first()
     if not mod:
