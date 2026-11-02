@@ -31,9 +31,9 @@ export const matchLogToSchedule = (schedule, maintenanceLogs = []) => {
   })
   if (explicitMatch) return explicitMatch
 
-  // 2. 里程區間容差比對 (500km 首保容許 50~1250km；2000km 以上定保容許 ±600km)
-  const minKm = targetKm === 500 ? 50 : targetKm - 600
-  const maxKm = targetKm === 500 ? 1250 : targetKm + 600
+  // 2. 里程區間容差比對 (500km 首保容許 50~1000km；1500km 間隔定保容許 ±450km)
+  const minKm = targetKm === 500 ? 50 : targetKm - 450
+  const maxKm = targetKm === 500 ? 1100 : targetKm + 450
 
   const odoMatches = maintenanceLogs
     .filter(log => {
@@ -342,19 +342,19 @@ export const useMotoStore = defineStore('moto', {
         prevKm = schedule.mileage
       }
 
-      const nextKm = Math.ceil((current + 1) / 2000) * 2000
-      const prevKmOverflow = Math.max(0, nextKm - 2000)
+      const nextKm = Math.ceil((current + 1) / 1500) * 1500
+      const prevKmOverflow = Math.max(0, nextKm - 1500)
       const remainingKm = Math.max(0, nextKm - current)
       return {
         mileage: nextKm,
-        title: `${nextKm.toLocaleString()} km 定期保養`,
-        items: [{ name: '原廠機油更換與日常安全檢查', required: true }],
+        title: `${nextKm.toLocaleString()} km 強化定期保養 (每 1,500km 週期)`,
+        items: [{ name: '原廠機油更換 (650cc) 與日常安全檢查', required: true }],
         remainingKm,
         isUrgent: remainingKm <= state.settings.notifyAdvanceKm,
         targetKm: nextKm,
         prevKm: prevKmOverflow,
-        interval: 2000,
-        progressPercent: Math.min(100, Math.max(0, Math.round(((current - prevKmOverflow) / 2000) * 100)))
+        interval: 1500,
+        progressPercent: Math.min(100, Math.max(0, Math.round(((current - prevKmOverflow) / 1500) * 100)))
       }
     },
 

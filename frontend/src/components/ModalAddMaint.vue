@@ -228,7 +228,7 @@ const save = async () => {
               type="number"
               inputmode="numeric"
               class="form-input text-highlight"
-              placeholder="如 500 或 2000"
+              placeholder="如 500、2000 或 3500"
             />
           </div>
           <div class="form-group">
@@ -250,7 +250,7 @@ const save = async () => {
             v-model="title"
             type="text"
             class="form-input"
-            placeholder="例如：500 km 新車首次定保 / 2,000 km 定期保養"
+            placeholder="例如：500 km 新車首次定保 / 2,000 km 強化保養"
           />
         </div>
 

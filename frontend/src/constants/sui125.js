@@ -17,12 +17,12 @@ export const VEHICLE_DEFAULTS = {
   note: 'Suzuki SUI 125 原廠好夥伴'
 }
 
-// SUZUKI 官方標準保養里程排程與項目 (依據台鈴官方車主使用與保養手冊 manual_sui-125.pdf)
-// 原廠首保為 500km，其後機油更換為每 2,000km，齒輪油每半年或 4,000km，計劃保養週期為每 4,000km
+// SUZUKI SUI 125 車主強化保養里程排程與項目 (兼顧官方手冊規範與台灣氣候/市區走走停停用車習慣，每 1,500km 強化定保)
+// 新車首保為 500km，其後機油更換為每 1,500km，齒輪油每 3,000km，重大定檢耗材於 8,000km / 17,000km / 20,000km 實施
 export const OFFICIAL_MAINTENANCE_SCHEDULE = [
   {
     mileage: 500,
-    title: '500 km 新車首次定保 (原廠首保)',
+    title: '500 km 新車磨合首次定保 (新車首保)',
     category: 'first_service',
     description: 'Suzuki 原廠規定新車磨合期完成後的首度保養（磨合馴車期 2000km 內請保持時速 60km/h 以下）',
     items: [
@@ -41,9 +41,9 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
   },
   {
     mileage: 2000,
-    title: '2,000 km 定期機油保養 (原廠週期)',
+    title: '2,000 km 強化定期機油保養 (行駛 1,500km)',
     category: 'oil_only',
-    description: 'Suzuki 原廠規定機油更換週期（每約 1950~2000 km 更換一次，磨合馴車期圓滿結束）',
+    description: '車主強化換油週期（新車首保後行駛 1,500km 定期更換，磨合馴車期圓滿結束）',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
       { name: '檢查機油液位尺油量與引擎密封性', required: true },
@@ -54,46 +54,57 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
     estimatedCost: 250
   },
   {
-    mileage: 4000,
-    title: '4,000 km 定期保養 (半年度定保)',
+    mileage: 3500,
+    title: '3,500 km 強化定期保養 (行駛 1,500km)',
     category: 'periodic',
-    description: 'Suzuki 原廠 6 個月/4,000km 計劃定檢：機油與齒輪油定保、進氣與傳動濾棉清潔檢測',
+    description: '每 1,500km 強化換油＋雙次定保更換齒輪油，兼顧市區停等高溫保護',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
-      { name: '更換原廠齒輪油 (50cc，原廠規定每半年或 4000km 更換一次)', required: true },
-      { name: '檢查/清潔空氣濾清器濾芯 (切勿使用高壓氣槍吹清濾芯以免破損)', required: true },
-      { name: '拆下冷卻導風蓋，以氣槍清潔內部過濾海綿', required: true },
-      { name: '檢查火星塞電極狀況 (NGK CPR7EA-9，間隙 0.8~0.9mm)', required: true },
-      { name: '檢查前後煞車系統與來令片磨耗', required: true },
-      { name: '檢查油門線間隙與車身螺栓扭力', required: false },
-      { name: '排氣 CO/HC 廢氣定檢 (原廠建議每 3 個月實施)', required: false }
+      { name: '更換原廠齒輪油 (50cc，每 3,000km 定期更換)', required: true },
+      { name: '檢查後煞車拉桿自由間隙 (後煞車 15~25mm)', required: true },
+      { name: '前後輪胎胎壓與外觀磨耗確認', required: false },
+      { name: '全車煞車作動巡檢', required: false }
     ],
-    estimatedCost: 450
+    estimatedCost: 350
   },
   {
-    mileage: 6000,
-    title: '6,000 km 定期機油保養',
+    mileage: 5000,
+    title: '5,000 km 強化定期保養 (行駛 1,500km)',
     category: 'oil_only',
-    description: '日常機油更換週期（每 2,000 km 依約保養，確保強制氣冷引擎長效保護）',
+    description: '日常機油更換與傳動進氣濾棉清潔巡檢，維持引擎順暢呼吸',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
-      { name: '煞車拉桿自由間隙檢查與調整 (後煞車 15~25mm)', required: true },
-      { name: '前後輪胎胎壓與胎紋點檢', required: false },
-      { name: '全車電系燈光點檢', required: false }
+      { name: '拆下冷卻導風蓋，以氣槍清潔內部過濾海綿', required: true },
+      { name: '煞車拉桿自由間隙確認與調整', required: true },
+      { name: '全車燈光電系與胎紋點檢', required: false }
     ],
     estimatedCost: 250
   },
   {
+    mileage: 6500,
+    title: '6,500 km 強化定期保養 (行駛 1,500km)',
+    category: 'periodic',
+    description: '每 1,500km 機油更換＋齒輪油雙保養，煞車來令片深度點檢',
+    items: [
+      { name: '更換原廠機油 (650cc)', required: true },
+      { name: '更換原廠齒輪油 (50cc)', required: true },
+      { name: '檢查前後煞車系統與來令片磨耗厚度', required: true },
+      { name: '檢查空氣濾清器濾芯表面灰塵 (清潔外盒)', required: false },
+      { name: '檢查油門線間隙與車身螺栓扭力', required: false }
+    ],
+    estimatedCost: 350
+  },
+  {
     mileage: 8000,
-    title: '8,000 km 定期重要大保養 (原廠 1 年耗材更換)',
+    title: '8,000 km 年度重要大保養 (行駛 1,500km，原廠大保養基準)',
     category: 'major',
-    description: 'Suzuki 原廠滿 12 個月重點大保養：空氣濾清器濾芯、火星塞、冷卻濾棉與傳動耗材更換基準里程',
+    description: 'Suzuki 原廠滿 1 年重點大保養：空濾、火星塞、冷風扇濾棉全面換新，傳動與汽門重點點檢',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
       { name: '更換原廠齒輪油 (50cc)', required: true },
       { name: '更換原廠空氣濾清器濾芯 (原廠保養表明訂 8,000km 更換)', required: true },
       { name: '更換原廠火星塞 (NGK CPR7EA-9，原廠保養表指定更換)', required: true },
-      { name: '更換冷卻導風蓋過濾棉 (傳動濾棉)', required: true },
+      { name: '更換冷卻導風蓋過濾棉 (傳動濾棉新品)', required: true },
       { name: '檢查/更換傳動驅動皮帶磨耗 (原廠保養週期表標記更換)', required: true },
       { name: '檢查汽門間隙 (原廠定期表 8000km 檢查項目)', required: true },
       { name: '檢查排氣管螺栓與消音器螺栓鎖緊', required: true },
@@ -103,57 +114,80 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
     estimatedCost: 950
   },
   {
-    mileage: 10000,
-    title: '10,000 km 萬里定保與燃油系統保養',
-    category: 'periodic',
-    description: '突破萬里大關，機油定保與噴射系統、煞車底盤全面健檢',
-    items: [
-      { name: '更換原廠機油 (650cc)', required: true },
-      { name: '清潔機油濾油網並檢查 O 型環', required: true },
-      { name: '檢查前後煞車來令片/後鼓煞蹄片厚度', required: true },
-      { name: '檢查電瓶電壓與接頭端子 (YTX7A-BS)', required: true },
-      { name: '添加台鈴環保噴油嘴清淨劑 (手冊建議每 1000~2000km 添加 30cc)', required: false },
-      { name: '前後避震器阻尼作動與轉向龍頭點檢', required: false }
-    ],
-    estimatedCost: 350
-  },
-  {
-    mileage: 12000,
-    title: '12,000 km 定期保養 (18 個月定檢)',
-    category: 'periodic',
-    description: '原廠第 18 個月定檢週期：油品更換、進氣與傳動室深層點檢',
-    items: [
-      { name: '更換原廠機油 (650cc)', required: true },
-      { name: '更換原廠齒輪油 (50cc)', required: true },
-      { name: '檢查/清潔空氣濾清器濾芯', required: true },
-      { name: '拆卸清潔冷卻導風蓋過濾海綿', required: true },
-      { name: '檢查火星塞狀況與點火效能', required: true },
-      { name: '清潔節氣門本體與噴油嘴積碳 (手冊 P.61 節油減排建議)', required: false },
-      { name: '傳動室拆檢清潔 (普利珠、普利盤滑件、離合器)', required: false }
-    ],
-    estimatedCost: 750
-  },
-  {
-    mileage: 14000,
-    title: '14,000 km 定期機油保養',
+    mileage: 9500,
+    title: '9,500 km 強化定期保養 (行駛 1,500km)',
     category: 'oil_only',
-    description: '日常機油更換與行車安全巡檢',
+    description: '大保養後之常規定保，確保氣冷引擎在最佳潤滑狀態',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
-      { name: '煞車拉桿自由間隙檢查 (後煞車 15~25mm)', required: true },
-      { name: '輪胎外觀、胎壓與胎紋深度確認', required: false }
+      { name: '檢查前後煞車作動手感與自由間隙', required: true },
+      { name: '胎壓確認與胎面異物排除', required: false }
     ],
     estimatedCost: 250
   },
   {
-    mileage: 16000,
-    title: '16,000 km 原廠 2 年全方位大保養 (更換煞車油)',
-    category: 'major',
-    description: 'Suzuki 原廠滿 24 個月旗艦保養：原廠手冊明訂每 2 年或 16,000km 更換煞車油 (DOT 4)',
+    mileage: 11000,
+    title: '11,000 km 萬里強化保養 (行駛 1,500km)',
+    category: 'periodic',
+    description: '突破萬里大關！油品定保與機油濾網清潔、噴油嘴保養',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
       { name: '更換原廠齒輪油 (50cc)', required: true },
-      { name: '更換煞車油 (DOT 4，原廠手冊明訂每 2 年或 16000km 更換)', required: true },
+      { name: '拆卸清潔機油濾油網並檢查 O 型環', required: true },
+      { name: '檢查前後煞車來令片/後鼓煞蹄片厚度', required: true },
+      { name: '檢查電瓶電壓與接頭端子 (YTX7A-BS)', required: true },
+      { name: '添加台鈴環保噴油嘴清淨劑 (建議每 1000~2000km 添加 30cc)', required: false }
+    ],
+    estimatedCost: 450
+  },
+  {
+    mileage: 12500,
+    title: '12,500 km 強化定期保養 (行駛 1,500km)',
+    category: 'periodic',
+    description: '日常強化機油定保與傳動室清潔檢驗',
+    items: [
+      { name: '更換原廠機油 (650cc)', required: true },
+      { name: '拆卸清潔冷卻導風蓋過濾海綿', required: true },
+      { name: '傳動室拆檢清潔 (普利珠、普利盤滑件、離合器)', required: false },
+      { name: '煞車拉桿自由間隙確認', required: true }
+    ],
+    estimatedCost: 450
+  },
+  {
+    mileage: 14000,
+    title: '14,000 km 強化定期保養 (行駛 1,500km)',
+    category: 'periodic',
+    description: '機油＋齒輪油強化定保與安全底盤巡檢',
+    items: [
+      { name: '更換原廠機油 (650cc)', required: true },
+      { name: '更換原廠齒輪油 (50cc)', required: true },
+      { name: '檢查空氣濾清器濾芯髒污程度', required: true },
+      { name: '煞車來令片磨耗確認與手感調整', required: true },
+      { name: '輪胎胎紋深度與胎壓點檢', required: false }
+    ],
+    estimatedCost: 350
+  },
+  {
+    mileage: 15500,
+    title: '15,500 km 強化定期機油保養 (行駛 1,500km)',
+    category: 'oil_only',
+    description: '常規機油定保，為即將到來的雙年度大保養預備',
+    items: [
+      { name: '更換原廠機油 (650cc)', required: true },
+      { name: '煞車拉桿自由間隙檢查 (後煞車 15~25mm)', required: true },
+      { name: '全車燈系與電瓶電壓點檢', required: false }
+    ],
+    estimatedCost: 250
+  },
+  {
+    mileage: 17000,
+    title: '17,000 km 雙年度旗艦大保養 (行駛 1,500km，更換煞車油)',
+    category: 'major',
+    description: '原廠滿 2 年大保養節點：明訂每 2 年更換煞車油 (DOT 4)、空氣濾清器、火星塞、冷風扇濾棉與傳動皮帶',
+    items: [
+      { name: '更換原廠機油 (650cc)', required: true },
+      { name: '更換原廠齒輪油 (50cc)', required: true },
+      { name: '更換煞車油 (DOT 4，原廠手冊明訂每 2 年更換)', required: true },
       { name: '更換原廠空氣濾清器濾芯', required: true },
       { name: '更換原廠火星塞 (NGK CPR7EA-9)', required: true },
       { name: '更換冷卻導風蓋過濾棉', required: true },
@@ -165,10 +199,10 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
     estimatedCost: 1850
   },
   {
-    mileage: 18000,
-    title: '18,000 km 定期機油保養',
+    mileage: 18500,
+    title: '18,500 km 強化定期機油保養 (行駛 1,500km)',
     category: 'oil_only',
-    description: '機油更換與安全點檢',
+    description: '機油更換與日常安全巡檢',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
       { name: '煞車來令片磨耗檢查與手感確認', required: true },
@@ -178,9 +212,9 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
   },
   {
     mileage: 20000,
-    title: '20,000 km 兩萬公里里程碑旗艦大檢修',
+    title: '20,000 km 兩萬公里里程碑旗艦大檢修 (行駛 1,500km)',
     category: 'major',
-    description: '原廠廢氣排放控制系統保證期滿檢驗，全車動力、傳動與進排氣系統深度檢修',
+    description: '兩萬公里大關：全車動力、傳動與進排氣系統深度翻新與排氣定檢',
     items: [
       { name: '更換原廠機油 (650cc)', required: true },
       { name: '更換原廠齒輪油 (50cc)', required: true },
@@ -196,19 +230,19 @@ export const OFFICIAL_MAINTENANCE_SCHEDULE = [
   }
 ]
 
-// 常見零件耗材建議更換週期 (km) - 依據 Suzuki SUI 125 原廠車主手冊規範
+// 常見零件耗材建議更換週期 (km) - 車主強化保護模式 (適應台灣氣候環境)
 export const PARTS_LIFECYCLE_GUIDE = [
   { 
     name: '機油 (Engine Oil)', 
-    intervalKm: 2000, 
+    intervalKm: 1500, 
     icon: 'Droplet', 
-    desc: '原廠手冊規定新車 500km 首保，以後每約 1950~2000km 更換一次 (容量 650cc，嚴苛條件如業務車建議 1000km)' 
+    desc: '車主強化保護週期：每 1,500 km 定期更換 (適應台灣高溫潮濕氣候、紅綠燈怠速與市區頻繁走走停停，全效保護 650cc 氣冷引擎)' 
   },
   { 
     name: '齒輪油 (Gear Oil)', 
-    intervalKm: 4000, 
+    intervalKm: 3000, 
     icon: 'Shield', 
-    desc: '原廠規定新車 500km 更換，以後每半年或 4000km 更換一次 (容量 50cc，SAE 10W-40 或 90# 專用油)' 
+    desc: '建議每 3,000 km 更換 (約每兩次機油定保更換一次，容量 50cc，SAE 10W-40 或 90# 專用油)' 
   },
   { 
     name: '空氣濾清器 (Air Filter)', 
@@ -232,13 +266,13 @@ export const PARTS_LIFECYCLE_GUIDE = [
     name: '傳動皮帶 (V-Belt)', 
     intervalKm: 16000, 
     icon: 'RotateCw', 
-    desc: '原廠保養週期表於 8000km、16000km 標記更換，建議每 4000km 檢查磨耗狀況' 
+    desc: '原廠保養週期表於 8000km、16000km~17000km 標記更換，建議每 4000km 檢查磨耗狀況' 
   },
   { 
     name: '煞車油 (Brake Fluid)', 
     intervalKm: 16000, 
     icon: 'AlertCircle', 
-    desc: '原廠手冊明訂每 2 年或 16000km 更換一次 (規格 DOT 4)' 
+    desc: '原廠手冊明訂每 2 年或 16000~17000km 更換一次 (規格 DOT 4)' 
   },
   { 
     name: '前煞車來令片 (Front Brake)', 
@@ -271,4 +305,3 @@ export const MOD_CATEGORIES = [
   { id: 'electronics', label: '電系 (行車記錄器/USB充電/胎壓偵測)' },
   { id: 'other', label: '其他週邊配件' }
 ]
-

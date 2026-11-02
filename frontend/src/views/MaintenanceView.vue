@@ -89,7 +89,7 @@ const deleteLog = (id) => {
     <div class="page-header">
       <div>
         <h2 class="page-title">保養與零件管理</h2>
-        <p class="page-subtitle">Suzuki SUI 125 原廠規範與耗材壽命</p>
+        <p class="page-subtitle">Suzuki SUI 125 車主強化規範 (每 1,500km 定保) 與耗材壽命</p>
       </div>
       <button class="btn btn-primary btn-sm" @click="openGeneralAddModal">
         <Plus :size="16" /> 記錄保養
@@ -161,7 +161,7 @@ const deleteLog = (id) => {
 
       <div class="info-banner">
         <Info :size="16" class="icon-blue" />
-        <span>Suzuki SUI 125 原廠規範：新車首保 500km，其後機油每 2,000km、齒輪油每 4,000km、重要耗材每 8,000 / 16,000km 定期更換。</span>
+        <span>Suzuki SUI 125 強化保養規範：新車首保 500km，其後每 1,500km 定期更換機油、每 3,000km 齒輪油、每 8,000 / 17,000km 實施全車耗材重大定檢。</span>
       </div>
 
       <div class="schedule-list">
