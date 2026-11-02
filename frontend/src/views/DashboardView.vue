@@ -19,6 +19,8 @@ import {
 import ModalQuickOdo from '../components/ModalQuickOdo.vue'
 import ModalAddFuel from '../components/ModalAddFuel.vue'
 import ModalAddMaint from '../components/ModalAddMaint.vue'
+import Moto3DShowroom from '../components/Moto3DShowroom.vue'
+import TcoAnalysisCard from '../components/TcoAnalysisCard.vue'
 
 const router = useRouter()
 const store = useMotoStore()
@@ -123,6 +125,9 @@ const maintProgress = computed(() => {
       </div>
     </div>
 
+    <!-- 3D 互動機車數位展示台 -->
+    <Moto3DShowroom />
+
     <!-- 下次保養倒數提醒卡片 -->
     <div 
       class="card maint-alert-card"
@@ -175,6 +180,9 @@ const maintProgress = computed(() => {
         <span>改裝日誌</span>
       </button>
     </div>
+
+    <!-- 養車總成本分析儀表板 (TCO & 每公里成本) -->
+    <TcoAnalysisCard />
 
     <!-- 最近一次保養與加油動態 -->
     <div class="section-title-row">

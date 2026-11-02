@@ -140,7 +140,179 @@ export const useMotoStore = defineStore('moto', {
         fuel: fuelTotal,
         maintenance: maintTotal,
         modifications: modTotal,
+        operatingTotal: fuelTotal + maintTotal,
         total: fuelTotal + maintTotal + modTotal
+      }
+    },
+
+    // 養車總成本分析 (TCO & 每公里成本 & 近 6 個月趨勢)
+    tcoAnalysis(state) {
+      const exp = this.totalExpenses
+      const odo = this.currentOdometer
+
+      const costPerKmOperating = odo > 0 ? Number((exp.operatingTotal / odo).toFixed(2)) : 0
+      const costPerKmTotal = odo > 0 ? Number((exp.total / odo).toFixed(2)) : 0
+      const fuelCostPerKm = odo > 0 ? Number((exp.fuel / odo).toFixed(2)) : 0
+      const maintCostPerKm = odo > 0 ? Number((exp.maintenance / odo).toFixed(2)) : 0
+      const modCostPerKm = odo > 0 ? Number((exp.modifications / odo).toFixed(2)) : 0
+
+      const safePct = (val, base) => (base > 0 ? Math.round((val / base) * 100) : 0)
+
+      // 彙整近 6 個月支出趨勢 (相容跨年份系統時鐘誤差與多種日期格式)
+      const monthMap = new Map()
+      const ensureMonth = (ym) => {
+        if (!monthMap.has(ym)) {
+          monthMap.set(ym, { ym, fuel: 0, maintenance: 0, modifications: 0, total: 0 })
+        }
+        return monthMap.get(ym)
+      }
+
+      const now = new Date()
+      const sysYear = now.getFullYear()
+      const sysMonth = now.getMonth() + 1
+
+      const extractYm = (dateStr) => {
+        if (!dateStr) return null
+        const s = String(dateStr).trim()
+        // 1. 標準 YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD
+        let m = s.match(/^(\d{4})[-/.年](\d{1,2})/)
+        if (m) {
+          const yr = Number(m[1])
+          const mo = Number(m[2])
+          if (mo >= 1 && mo <= 12) return `${yr}-${String(mo).padStart(2, '0')}`
+        }
+        // 2. 民國年 YYY/MM/DD (如 114/10/26)
+        m = s.match(/^(\d{2,3})[-/.年](\d{1,2})[-/.月](\d{1,2})/)
+        if (m && Number(m[1]) >= 100 && Number(m[1]) <= 150) {
+          const yr = Number(m[1]) + 1911
+          const mo = Number(m[2])
+          if (mo >= 1 && mo <= 12) return `${yr}-${String(mo).padStart(2, '0')}`
+        }
+        // 3. MM/DD/YYYY 或 MM-DD-YYYY
+        m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/)
+        if (m) {
+          const yr = Number(m[3])
+          const first = Number(m[1])
+          const second = Number(m[2])
+          const mo = first <= 12 ? first : second
+          if (mo >= 1 && mo <= 12) return `${yr}-${String(mo).padStart(2, '0')}`
+        }
+        // 4. 簡短月日 MM/DD 或 MM-DD (如 10/26)
+        m = s.match(/^(\d{1,2})[-/.月](\d{1,2})/)
+        if (m) {
+          const mo = Number(m[1])
+          if (mo >= 1 && mo <= 12) return `${sysYear}-${String(mo).padStart(2, '0')}`
+        }
+        // 5. Fallback Date 解析
+        const parsed = new Date(s)
+        if (!isNaN(parsed.getTime())) {
+          return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`
+        }
+        return null
+      }
+
+      state.fuelLogs.forEach(l => {
+        const ym = extractYm(l.date)
+        if (ym) {
+          const item = ensureMonth(ym)
+          const c = Number(l.totalCost) || Number(l.cost) || Math.round((Number(l.liters) || 0) * (Number(l.pricePerLiter) || 30.2))
+          item.fuel += c
+          item.total += c
+        }
+      })
+
+      state.maintenanceLogs.forEach(l => {
+        const ym = extractYm(l.date)
+        if (ym) {
+          const item = ensureMonth(ym)
+          const c = Number(l.cost) || 0
+          item.maintenance += c
+          item.total += c
+        }
+      })
+
+      state.modifications.forEach(l => {
+        const ym = extractYm(l.date)
+        if (ym) {
+          const item = ensureMonth(ym)
+          const c = Number(l.cost) || 0
+          item.modifications += c
+          item.total += c
+        }
+      })
+
+      // 決定基準月份：預設以當前系統年月為基準，若紀錄中有更新的合理月份則採用
+      let anchorYear = sysYear
+      let anchorMonth = sysMonth
+
+      const allYms = Array.from(monthMap.keys()).sort()
+      if (allYms.length > 0) {
+        const latestYm = allYms[allYms.length - 1]
+        const [y, m] = latestYm.split('-').map(Number)
+        // 避免誤填太遠未來年份導致近期月份消失
+        if (y <= sysYear + 1 && y * 12 + m > anchorYear * 12 + anchorMonth) {
+          anchorYear = y
+          anchorMonth = m
+        }
+      }
+
+      const monthlySeries = []
+      for (let i = 5; i >= 0; i--) {
+        let m = anchorMonth - i
+        let y = anchorYear
+        while (m <= 0) {
+          m += 12
+          y -= 1
+        }
+        const mmStr = String(m).padStart(2, '0')
+        const targetYm = `${y}-${mmStr}`
+
+        // 合併該月份數據（同時相容因系統年份 2025/2026 切換差 1 年的同月份紀錄，確保 10 月、9 月紀錄不因跨年時鐘差而遺漏）
+        let fuelSum = 0
+        let maintSum = 0
+        let modSum = 0
+
+        for (const [keyYm, val] of monthMap.entries()) {
+          const [ky, km] = keyYm.split('-').map(Number)
+          if (km === m && Math.abs(ky - y) <= 1) {
+            fuelSum += val.fuel
+            maintSum += val.maintenance
+            modSum += val.modifications
+          }
+        }
+
+        monthlySeries.push({
+          ym: targetYm,
+          fuel: fuelSum,
+          maintenance: maintSum,
+          modifications: modSum,
+          total: fuelSum + maintSum + modSum,
+          label: `${m}月`
+        })
+      }
+
+      const activeMonthsCount = Math.max(1, monthMap.size)
+      const avgMonthlyTotal = Math.round(exp.total / activeMonthsCount)
+      const avgMonthlyOperating = Math.round(exp.operatingTotal / activeMonthsCount)
+
+      return {
+        costPerKmOperating,
+        costPerKmTotal,
+        fuelCostPerKm,
+        maintCostPerKm,
+        modCostPerKm,
+        sharesTotal: {
+          fuel: safePct(exp.fuel, exp.total),
+          maintenance: safePct(exp.maintenance, exp.total),
+          modifications: safePct(exp.modifications, exp.total)
+        },
+        sharesOperating: {
+          fuel: safePct(exp.fuel, exp.operatingTotal),
+          maintenance: safePct(exp.maintenance, exp.operatingTotal)
+        },
+        monthlySeries,
+        avgMonthlyTotal,
+        avgMonthlyOperating
       }
     },
 
@@ -393,15 +565,17 @@ export const useMotoStore = defineStore('moto', {
       ])
 
       try {
-        const [v, recentFuels, recentMaints] = await Promise.all([
+        const [v, recentFuels, recentMaints, recentMods] = await Promise.all([
           api.getVehicle().catch(() => null),
           api.getFuelLogs().catch(() => null),
-          api.getMaintenanceLogs().catch(() => null)
+          api.getMaintenanceLogs().catch(() => null),
+          api.getModifications().catch(() => null)
         ])
 
         if (v) this.vehicle = { ...this.vehicle, ...v }
         if (Array.isArray(recentFuels)) this._mergeRemoteFuelLogs(recentFuels)
         if (Array.isArray(recentMaints)) this._mergeRemoteMaintenanceLogs(recentMaints)
+        if (Array.isArray(recentMods)) this._mergeRemoteModifications(recentMods)
         this.isBackendOnline = true
         this.persist()
       } catch (err) {

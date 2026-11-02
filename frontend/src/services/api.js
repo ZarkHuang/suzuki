@@ -250,12 +250,9 @@ export const api = {
       const res = await apiClient.put(`/api/fuel/${id}`, payload)
       return formatFuelFromBackend(res.data)
     } catch (err) {
-      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
-        await apiClient.delete(`/api/fuel/${id}`).catch(() => {})
-        const created = await apiClient.post('/api/fuel', payload)
-        return formatFuelFromBackend(created.data)
-      }
-      throw err
+      await apiClient.delete(`/api/fuel/${id}`).catch(() => {})
+      const created = await apiClient.post('/api/fuel', payload)
+      return formatFuelFromBackend(created.data)
     }
   },
 
@@ -301,13 +298,10 @@ export const api = {
       const res = await apiClient.put(`/api/maintenance/${id}`, payload)
       return formatMaintFromBackend(res.data)
     } catch (err) {
-      // 若遠端舊版 API 尚未支援 PUT，自動以先刪後建進行雲端相容同步
-      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
-        await apiClient.delete(`/api/maintenance/${id}`).catch(() => {})
-        const created = await apiClient.post('/api/maintenance', payload)
-        return formatMaintFromBackend(created.data)
-      }
-      throw err
+      // 若遠端舊版 API 尚未支援 PUT (含 404/405 或 CORS 攔截)，自動以先刪後建進行雲端相容同步
+      await apiClient.delete(`/api/maintenance/${id}`).catch(() => {})
+      const created = await apiClient.post('/api/maintenance', payload)
+      return formatMaintFromBackend(created.data)
     }
   },
 
@@ -357,12 +351,9 @@ export const api = {
       const res = await apiClient.put(`/api/modifications/${id}`, payload)
       return formatModFromBackend(res.data)
     } catch (err) {
-      if (err.response && (err.response.status === 404 || err.response.status === 405)) {
-        await apiClient.delete(`/api/modifications/${id}`).catch(() => {})
-        const created = await apiClient.post('/api/modifications', payload)
-        return formatModFromBackend(created.data)
-      }
-      throw err
+      await apiClient.delete(`/api/modifications/${id}`).catch(() => {})
+      const created = await apiClient.post('/api/modifications', payload)
+      return formatModFromBackend(created.data)
     }
   },
 
