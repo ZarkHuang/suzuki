@@ -36,12 +36,17 @@ const displayModel = computed(() => {
             <span class="plate-number">{{ store.vehicle.licensePlate || 'MY-SUI125' }}</span>
             <span 
               class="db-badge" 
-              :class="store.isBackendOnline ? 'db-online' : 'db-offline'"
-              :title="store.isBackendOnline ? '雲端 MySQL 連線正常' : '離線模式'"
-              @click.stop="store.initSyncWithBackend()"
+              :class="{
+                'db-syncing': store.isSyncing,
+                'db-pending': store.unsyncedCount > 0,
+                'db-online': store.isBackendOnline && store.unsyncedCount === 0,
+                'db-offline': !store.isBackendOnline && store.unsyncedCount === 0
+              }"
+              :title="store.unsyncedCount > 0 ? `尚有 ${store.unsyncedCount} 筆資料待上傳至雲端 (點擊立即同步)` : (store.isBackendOnline ? '雲端 MySQL 連線正常' : '離線模式 (點擊重新連線)')"
+              @click.stop="store.initSyncWithBackend(true)"
             >
               <span class="status-dot"></span>
-              {{ store.isSyncing ? '同步中' : (store.isBackendOnline ? 'Cloud' : '離線') }}
+              {{ store.isSyncing ? '同步中' : (store.unsyncedCount > 0 ? `待同步 (${store.unsyncedCount})` : (store.isBackendOnline ? '已同步' : '離線')) }}
             </span>
           </div>
         </div>
@@ -194,6 +199,40 @@ const displayModel = computed(() => {
   border-radius: 50%;
   background: #34d399;
   box-shadow: 0 0 5px #34d399;
+}
+
+.db-pending {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.db-pending .status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 5px #fbbf24;
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+.db-syncing {
+  background: rgba(14, 165, 233, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.4);
+}
+
+.db-syncing .status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #38bdf8;
+  animation: pulse-dot 0.8s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
 }
 
 .db-offline {

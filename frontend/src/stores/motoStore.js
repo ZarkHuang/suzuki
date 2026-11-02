@@ -408,6 +408,13 @@ export const useMotoStore = defineStore('moto', {
       if (!state.authToken || !state.currentUser) return false
       return state.vehicle?.isInitialized === false || !state.vehicle?.isInitialized
     },
+    // 待同步至雲端資料庫的本地暫存筆數 (fuel-..., maint-..., mod-...)
+    unsyncedCount: (state) => {
+      const fuels = state.fuelLogs.filter(l => String(l.id).startsWith('fuel-')).length
+      const maints = state.maintenanceLogs.filter(l => String(l.id).startsWith('maint-')).length
+      const mods = state.modifications.filter(m => String(m.id).startsWith('mod-')).length
+      return fuels + maints + mods
+    },
   },
 
   actions: {
@@ -419,6 +426,98 @@ export const useMotoStore = defineStore('moto', {
       this.modifications = []
     },
 
+    // 優先從本地持久快取載入使用者資料 (避免登入時被雲端舊空值或空白覆蓋)
+    loadLocalDataForUser(userId) {
+      if (!userId) return
+      try {
+        const key = getStorageKey(userId)
+        const saved = localStorage.getItem(key)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.vehicle) {
+            const localOdo = Number(parsed.vehicle.currentOdo || 0)
+            const curOdo = Number(this.vehicle?.currentOdo || 0)
+            this.vehicle = { ...this.vehicle, ...parsed.vehicle, currentOdo: Math.max(localOdo, curOdo) }
+          }
+          if (Array.isArray(parsed.fuelLogs) && parsed.fuelLogs.length > 0) {
+            this._mergeRemoteFuelLogs(parsed.fuelLogs)
+          }
+          if (Array.isArray(parsed.maintenanceLogs) && parsed.maintenanceLogs.length > 0) {
+            this._mergeRemoteMaintenanceLogs(parsed.maintenanceLogs)
+          }
+          if (Array.isArray(parsed.modifications) && parsed.modifications.length > 0) {
+            this._mergeRemoteModifications(parsed.modifications)
+          }
+          if (parsed.settings) {
+            this.settings = { ...this.settings, ...parsed.settings }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load local data for user:', e)
+      }
+    },
+
+    // 自動背景補推未同步的本地暫存紀錄至雲端
+    async flushPendingUnsyncedRecords() {
+      if (!this.isAuthenticated || !this.isBackendOnline) return
+      let hasChanges = false
+
+      // 1. 加油紀錄補推
+      const pendingFuels = this.fuelLogs.filter(l => String(l.id).startsWith('fuel-'))
+      for (const fuel of pendingFuels) {
+        try {
+          const res = await api.createFuelLog(fuel)
+          if (res && res.id) {
+            const idx = this.fuelLogs.findIndex(l => l.id === fuel.id)
+            if (idx !== -1) {
+              this.fuelLogs[idx].id = res.id
+              hasChanges = true
+            }
+          }
+        } catch (e) {
+          console.warn('Auto flush fuel log failed:', e)
+        }
+      }
+
+      // 2. 保養紀錄補推
+      const pendingMaints = this.maintenanceLogs.filter(l => String(l.id).startsWith('maint-'))
+      for (const maint of pendingMaints) {
+        try {
+          const res = await api.createMaintenanceLog(maint)
+          if (res && res.id) {
+            const idx = this.maintenanceLogs.findIndex(l => l.id === maint.id)
+            if (idx !== -1) {
+              this.maintenanceLogs[idx].id = res.id
+              hasChanges = true
+            }
+          }
+        } catch (e) {
+          console.warn('Auto flush maint log failed:', e)
+        }
+      }
+
+      // 3. 改裝紀錄補推
+      const pendingMods = this.modifications.filter(m => String(m.id).startsWith('mod-'))
+      for (const mod of pendingMods) {
+        try {
+          const res = await api.createModification(mod)
+          if (res && res.id) {
+            const idx = this.modifications.findIndex(m => m.id === mod.id)
+            if (idx !== -1) {
+              this.modifications[idx].id = res.id
+              hasChanges = true
+            }
+          }
+        } catch (e) {
+          console.warn('Auto flush mod failed:', e)
+        }
+      }
+
+      if (hasChanges) {
+        this.persist()
+      }
+    },
+
     // 開關登入彈窗
     openAuthModal() {
       this.isAuthModalOpen = true
@@ -427,7 +526,7 @@ export const useMotoStore = defineStore('moto', {
       this.isAuthModalOpen = false
     },
 
-    // 登入
+    // 登入 (智慧防護：優先復原本地資料，絕不覆蓋抹除)
     async login(email, password) {
       try {
         const res = await api.login(email, password)
@@ -435,16 +534,15 @@ export const useMotoStore = defineStore('moto', {
         this.currentUser = res.user
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
         this.closeAuthModal()
-        this.resetToCleanState()
-        // 重新從雲端抓取該帳號專屬資料
+        // 1. 優先從本地快取讀取該帳號先前的資料，保留未同步紀錄
+        this.loadLocalDataForUser(res.user.id)
+        // 2. 與雲端雙向合併 (保留較大里程、補推未同步紀錄)
         await this.initSyncWithBackend(true)
         return { success: true }
       } catch (err) {
         return { success: false, error: err.message }
       }
     },
-
-
 
     // 註冊
     async register(username, email, password) {
@@ -454,8 +552,9 @@ export const useMotoStore = defineStore('moto', {
         this.currentUser = res.user
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token: res.access_token, user: res.user }))
         this.closeAuthModal()
-        this.resetToCleanState()
-        // 重新從雲端抓取該帳號專屬資料
+        // 若註冊前有本機資料，妥善繼承綁定
+        this.loadLocalDataForUser(res.user.id)
+        this.persist()
         await this.initSyncWithBackend(true)
         return { success: true }
       } catch (err) {
@@ -463,17 +562,13 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // 登出
+    // 登出 (核心安全防線：僅清除登入權杖，【絕不刪除】使用者的本機快取資料！)
     logout() {
-      const oldUserId = this.currentUser?.id
       this.authToken = null
       this.currentUser = null
       localStorage.removeItem(AUTH_STORAGE_KEY)
-      if (oldUserId) {
-        localStorage.removeItem(getStorageKey(oldUserId))
-      }
       this.resetToCleanState()
-      this.initSyncWithBackend(true)
+      this.isBackendOnline = false
     },
 
     // 精準獨立同步 1: 車輛與儀表設定 (/api/vehicle)
@@ -486,7 +581,13 @@ export const useMotoStore = defineStore('moto', {
       try {
         const v = await api.getVehicle()
         if (v) {
-          this.vehicle = { ...this.vehicle, ...v }
+          const localOdo = Number(this.vehicle?.currentOdo || 0)
+          const remoteOdo = Number(v.current_odo ?? v.currentOdo ?? 0)
+          const maxOdo = Math.max(localOdo, remoteOdo)
+          this.vehicle = { ...this.vehicle, ...v, currentOdo: maxOdo }
+          if (localOdo > remoteOdo) {
+            api.updateVehicle(this.vehicle).catch(() => {})
+          }
           this.isBackendOnline = true
           this.persist()
         }
@@ -501,14 +602,17 @@ export const useMotoStore = defineStore('moto', {
       return matchLogToSchedule(schedule, this.maintenanceLogs)
     },
 
-    // 安全合併雲端加油紀錄與本地尚未同步完成的紀錄
+    // 安全合併雲端加油紀錄與本地尚未同步完成的紀錄 (雙向不遺漏)
     _mergeRemoteFuelLogs(remoteLogs) {
       if (!Array.isArray(remoteLogs)) return
-      const pendingLocal = this.fuelLogs.filter(l => String(l.id).startsWith('fuel-'))
       const merged = [...remoteLogs]
-      for (const local of pendingLocal) {
+      for (const local of this.fuelLogs) {
         const alreadyExists = merged.some(
-          r => Number(r.odometer) === Number(local.odometer) && r.date === local.date && Number(r.liters) === Number(local.liters)
+          r => String(r.id) === String(local.id) || (
+            Number(r.odometer) === Number(local.odometer) &&
+            r.date === local.date &&
+            Math.abs(Number(r.liters) - Number(local.liters)) < 0.01
+          )
         )
         if (!alreadyExists) {
           merged.push(local)
@@ -521,11 +625,14 @@ export const useMotoStore = defineStore('moto', {
     // 安全合併雲端保養紀錄與本地尚未同步完成的紀錄，避免切換頁籤時被覆蓋消失
     _mergeRemoteMaintenanceLogs(remoteLogs) {
       if (!Array.isArray(remoteLogs)) return
-      const pendingLocal = this.maintenanceLogs.filter(l => String(l.id).startsWith('maint-'))
       const merged = [...remoteLogs]
-      for (const local of pendingLocal) {
+      for (const local of this.maintenanceLogs) {
         const alreadyExists = merged.some(
-          r => Number(r.odometer) === Number(local.odometer) && r.date === local.date && r.title === local.title
+          r => String(r.id) === String(local.id) || (
+            Number(r.odometer) === Number(local.odometer) &&
+            r.date === local.date &&
+            r.title === local.title
+          )
         )
         if (!alreadyExists) {
           merged.push(local)
@@ -538,11 +645,14 @@ export const useMotoStore = defineStore('moto', {
     // 安全合併雲端改裝紀錄與本地尚未同步完成的紀錄
     _mergeRemoteModifications(remoteLogs) {
       if (!Array.isArray(remoteLogs)) return
-      const pendingLocal = this.modifications.filter(m => String(m.id).startsWith('mod-'))
       const merged = [...remoteLogs]
-      for (const local of pendingLocal) {
+      for (const local of this.modifications) {
         const alreadyExists = merged.some(
-          r => r.title === local.title && r.date === local.date && Number(r.cost) === Number(local.cost)
+          r => String(r.id) === String(local.id) || (
+            r.title === local.title &&
+            r.date === local.date &&
+            Number(r.cost) === Number(local.cost)
+          )
         )
         if (!alreadyExists) {
           merged.push(local)
@@ -572,12 +682,21 @@ export const useMotoStore = defineStore('moto', {
           api.getModifications().catch(() => null)
         ])
 
-        if (v) this.vehicle = { ...this.vehicle, ...v }
+        if (v) {
+          const localOdo = Number(this.vehicle?.currentOdo || 0)
+          const remoteOdo = Number(v.current_odo ?? v.currentOdo ?? 0)
+          const maxOdo = Math.max(localOdo, remoteOdo)
+          this.vehicle = { ...this.vehicle, ...v, currentOdo: maxOdo }
+          if (localOdo > remoteOdo) {
+            api.updateVehicle(this.vehicle).catch(() => {})
+          }
+        }
         if (Array.isArray(recentFuels)) this._mergeRemoteFuelLogs(recentFuels)
         if (Array.isArray(recentMaints)) this._mergeRemoteMaintenanceLogs(recentMaints)
         if (Array.isArray(recentMods)) this._mergeRemoteModifications(recentMods)
         this.isBackendOnline = true
         this.persist()
+        this.flushPendingUnsyncedRecords().catch(() => {})
       } catch (err) {
         console.warn('Sync dashboard summary failed:', err)
       }
@@ -652,7 +771,7 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // 全局一次性初始化同步
+    // 全局一次性初始化同步 (雙向智能合併，里程取大，自動補推未同步紀錄)
     async initSyncWithBackend(force = false) {
       const now = Date.now()
       if (!force && this._lastGlobalSync && now - this._lastGlobalSync < 3000) return
@@ -671,11 +790,22 @@ export const useMotoStore = defineStore('moto', {
             api.getModifications().catch(() => null)
           ])
 
-          if (v) this.vehicle = { ...this.vehicle, ...v }
+          if (v) {
+            const localOdo = Number(this.vehicle?.currentOdo || 0)
+            const remoteOdo = Number(v.current_odo ?? v.currentOdo ?? 0)
+            const maxOdo = Math.max(localOdo, remoteOdo)
+            this.vehicle = { ...this.vehicle, ...v, currentOdo: maxOdo }
+            if (localOdo > remoteOdo) {
+              api.updateVehicle(this.vehicle).catch(e => console.warn('Push higher odo to remote failed:', e))
+            }
+          }
           if (Array.isArray(fuels)) this._mergeRemoteFuelLogs(fuels)
           if (Array.isArray(maints)) this._mergeRemoteMaintenanceLogs(maints)
           if (Array.isArray(mods)) this._mergeRemoteModifications(mods)
-          console.log(`✅ 已完成雲端同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
+
+          // 自動補推未同步的本地紀錄
+          await this.flushPendingUnsyncedRecords()
+          console.log(`✅ 已完成雲端雙向同步 (SaaS 用戶: ${this.currentUser?.username || this.currentUser?.email})`)
         } else if (!this.isAuthenticated) {
           // 未登入訪客模式保持純淨空狀態
           this.resetToCleanState()
@@ -771,15 +901,18 @@ export const useMotoStore = defineStore('moto', {
       }
     },
 
-    // 更新里程 (直接以使用者輸入為準)
-    updateOdometer(newOdo) {
+    // 更新里程 (直接以使用者輸入為準，雙寫本地並同步至雲端)
+    async updateOdometer(newOdo) {
       if (newOdo !== undefined && newOdo !== null) {
         this.vehicle.currentOdo = Number(newOdo)
         this.persist()
         if (this.isAuthenticated) {
-          api.updateVehicle(this.vehicle).then(() => {
+          try {
+            await api.updateVehicle(this.vehicle)
             this.isBackendOnline = true
-          }).catch(() => {})
+          } catch (e) {
+            console.warn('Sync odometer to backend failed (stored safely in localStorage):', e)
+          }
         }
       }
     },

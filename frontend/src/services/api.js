@@ -32,10 +32,10 @@ export const getBaseUrl = () => {
   return envUrl.replace(/\/$/, '').replace(/\/api$/, '')
 }
 
-// 2. 建立標準 Axios 實例
+// 2. 建立標準 Axios 實例 (逾時延長至 50 秒以完整支援 Render 免費冷啟動喚醒)
 export const apiClient = axios.create({
   baseURL: getBaseUrl(),
-  timeout: 15000,
+  timeout: 50000,
   headers: {
     'Content-Type': 'application/json'
   }
