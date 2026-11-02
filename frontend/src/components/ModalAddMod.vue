@@ -128,7 +128,9 @@ const save = async () => {
               <button type="button" class="btn-quick-date" :class="{ active: date === getYesterdayStr() }" @click="setDateYesterday">昨天</button>
             </div>
           </div>
-          <input v-model="date" type="date" class="form-input date-input" />
+          <div class="date-input-shell">
+            <input v-model="date" type="date" class="date-input-native" />
+          </div>
         </div>
 
         <div class="form-row-two">

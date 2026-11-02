@@ -54,6 +54,10 @@ const currentOdo = computed(() => store.currentOdometer)
 const avgEfficiency = computed(() => store.averageEfficiency)
 const totalExpenses = computed(() => store.totalExpenses)
 const nextMaint = computed(() => store.nextMaintenance)
+const nextMaintShortTitle = computed(() => {
+  const raw = nextMaint.value?.title || ''
+  return raw.replace(/\s*[（(].*?[)）]\s*$/, '').trim()
+})
 const recentFuel = computed(() => store.fuelLogs[0] || null)
 const recentMaint = computed(() => store.maintenanceLogs[0] || null)
 
@@ -127,12 +131,12 @@ const maintProgress = computed(() => {
     >
       <div class="maint-card-header">
         <div class="alert-tag">
-          <AlertTriangle v-if="nextMaint.isUrgent" :size="16" class="icon-urgent" />
-          <Wrench v-else :size="16" class="icon-blue" />
-          <span class="alert-title">{{ nextMaint.title }}</span>
+          <AlertTriangle v-if="nextMaint.isUrgent" :size="16" class="icon-urgent alert-icon" />
+          <Wrench v-else :size="16" class="icon-blue alert-icon" />
+          <span class="alert-title">{{ nextMaintShortTitle }}</span>
         </div>
-        <span class="badge" :class="nextMaint.isUrgent ? 'badge-red' : 'badge-blue'">
-          {{ nextMaint.remainingKm <= 0 ? '已達保養里程' : `還剩 ${nextMaint.remainingKm} km` }}
+        <span class="badge maint-remaining-badge" :class="nextMaint.isUrgent ? 'badge-red' : 'badge-blue'">
+          {{ nextMaint.remainingKm <= 0 ? '已達保養里程' : `還剩 ${nextMaint.remainingKm.toLocaleString()} km` }}
         </span>
       </div>
 
@@ -440,6 +444,7 @@ const maintProgress = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
@@ -447,12 +452,26 @@ const maintProgress = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-icon {
+  flex-shrink: 0;
 }
 
 .alert-title {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.maint-remaining-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .icon-urgent {

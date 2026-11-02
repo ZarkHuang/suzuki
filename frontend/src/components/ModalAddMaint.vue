@@ -214,7 +214,9 @@ const save = async () => {
               </button>
             </div>
           </div>
-          <input v-model="date" type="date" class="form-input date-input" />
+          <div class="date-input-shell">
+            <input v-model="date" type="date" class="date-input-native" />
+          </div>
         </div>
 
         <!-- 2. 保養總里程 & 保養總花費 (雙欄自適應 Grid) -->

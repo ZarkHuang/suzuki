@@ -186,6 +186,8 @@ body {
   border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .badge-blue {
@@ -228,6 +230,9 @@ body {
 /* 表單元素 */
 .form-group {
   margin-bottom: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .form-label {
@@ -239,7 +244,11 @@ body {
 }
 
 .form-input, .form-select, .form-textarea {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: #0d0f14;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-md);
@@ -249,6 +258,67 @@ body {
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="date"].form-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 46px;
+  line-height: 1.4;
+  color-scheme: dark;
+  overflow: hidden;
+}
+
+input[type="date"].form-input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+/* 日期外框容器：確保手機瀏覽器原生 date input 右側絕對不會超出對齊線 */
+.date-input-shell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #0d0f14;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.date-input-shell:focus-within {
+  border-color: var(--suzuki-blue-light);
+  box-shadow: 0 0 0 3px rgba(0, 91, 172, 0.25);
+}
+
+.date-input-native {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 0%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  color-scheme: dark;
+}
+
+.date-input-native::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
 }
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
